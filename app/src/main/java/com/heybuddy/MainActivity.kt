@@ -12,6 +12,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
@@ -39,7 +40,10 @@ import com.heybuddy.ui.theme.MotionDurations
 import com.heybuddy.ui.theme.motionDelayMillis
 import com.heybuddy.ui.theme.motionSpec
 import com.heybuddy.ui.theme.performConfirmHaptic
-import com.heybuddy.ui.vault.VaultHomePlaceholder
+import com.heybuddy.ui.vault.VaultListScreen
+import com.heybuddy.ui.viewer.ViewerActions
+import com.heybuddy.ui.viewer.ViewerScreen
+import com.heybuddy.ui.viewer.ViewerViewModel
 import com.heybuddy.ui.unlock.NoScreenLockScreen
 import com.heybuddy.ui.unlock.UnlockScreen
 import com.heybuddy.ui.unlock.UnlockViewModel
@@ -120,13 +124,23 @@ private fun topScreenTransition(target: TopScreen, reduceMotion: Boolean): Conte
         fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
 }
 
-/** Moving between vault screens: a short fade with a slight upward slide (spec 5.14). */
-private fun vaultScreenTransition(reduceMotion: Boolean): ContentTransform {
-    val enter = fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) +
-        slideInVertically(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) { height -> height / SLIDE_FRACTION }
+/**
+ * Moving between vault screens (spec 5.14): a short fade with a slight upward slide; the viewer
+ * opens with a gentle zoom-in instead.
+ */
+private fun vaultScreenTransition(target: VaultScreen, reduceMotion: Boolean): ContentTransform {
+    val fade = fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
+    val enter = if (target is VaultScreen.Viewer) {
+        fade + scaleIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion), initialScale = VIEWER_START_SCALE)
+    } else {
+        fade + slideInVertically(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) { height -> height / SLIDE_FRACTION }
+    }
     val exit = fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
     return enter togetherWith exit
 }
+
+/** The viewer starts at 96% size and grows to full size as it fades in. */
+private const val VIEWER_START_SCALE = 0.96f
 
 /** Screens slide in from 1/24 of their height below: enough to feel smooth, small enough to stay calm. */
 private const val SLIDE_FRACTION = 24
@@ -140,25 +154,68 @@ private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
     val reduceMotion = LocalReduceMotion.current
     AnimatedContent(
         targetState = screen,
-        transitionSpec = { vaultScreenTransition(reduceMotion) },
+        transitionSpec = { vaultScreenTransition(targetState, reduceMotion) },
         label = "vaultScreen",
     ) { shown ->
         when (shown) {
-            VaultScreen.HOME -> {
+            // On the list, Back is not handled here, so it leaves the app normally.
+            VaultScreen.List -> {
                 val documents by remember { container.vaultRepository.observeDocuments() }
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                VaultHomePlaceholder(
-                    documentCount = documents.size,
-                    onAddDocument = { navigator.open(VaultScreen.ADD_DOCUMENT) },
+                VaultListScreen(
+                    documents = documents,
+                    onOpenDocument = { documentId -> navigator.open(VaultScreen.Viewer(documentId)) },
+                    onAddDocument = { navigator.open(VaultScreen.AddDocument) },
                 )
             }
-            VaultScreen.ADD_DOCUMENT -> AddDocumentRoute(
+            VaultScreen.AddDocument -> AddDocumentRoute(
                 container = container,
                 activity = activity,
-                onClose = { navigator.backToHome() },
+                onClose = { navigator.handleBack() },
             )
+            is VaultScreen.Viewer -> ViewerRoute(container = container, activity = activity, documentId = shown.documentId)
         }
     }
+}
+
+@Composable
+private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, documentId: String) {
+    val viewerViewModel: ViewerViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                ViewerViewModel(
+                    repository = container.vaultRepository,
+                    unlocker = container.biometricUnlocker,
+                    lockState = container.vaultLockState,
+                    navigator = container.vaultNavigator,
+                    tempFileCleaner = container.tempFileCleaner,
+                )
+            }
+        },
+    )
+    val metrics = activity.resources.displayMetrics
+    val screenWidth = metrics.widthPixels
+    val screenLongest = maxOf(metrics.widthPixels, metrics.heightPixels)
+    LaunchedEffect(documentId) {
+        viewerViewModel.show(activity, documentId, screenWidth, screenLongest)
+    }
+    val uiState by viewerViewModel.uiState.collectAsStateWithLifecycle()
+    // Back: closes the Rename dialog if open (the dialog itself also does this), otherwise tidies
+    // up (PDF deleted, picture freed) and returns to the list.
+    BackHandler(onBack = viewerViewModel::onBack)
+    ViewerScreen(
+        uiState = uiState,
+        actions = ViewerActions(
+            onBack = viewerViewModel::onBack,
+            onRetry = { viewerViewModel.retry(activity) },
+            onPreviousPage = viewerViewModel::previousPage,
+            onNextPage = viewerViewModel::nextPage,
+            onRenameClick = viewerViewModel::openRename,
+            onRenameTextChanged = viewerViewModel::onRenameTextChanged,
+            onRenameConfirm = viewerViewModel::confirmRename,
+            onRenameDismiss = viewerViewModel::closeRename,
+        ),
+    )
 }
 
 @Composable
@@ -176,6 +233,7 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
         },
     )
     val uiState by addViewModel.uiState.collectAsStateWithLifecycle()
+    // Back, Cancel and Done all wipe any picked file bytes before returning to the list.
     val closeAndForget = {
         addViewModel.reset()
         onClose()

@@ -180,6 +180,18 @@ class FileCrypto(
     }
 
     /**
+     * A new, unused file name inside view_tmp for viewing a PDF.
+     *
+     * The name is random, never the document's name or id, so nothing about the document can be
+     * read from the folder.
+     *
+     * @return A file in view_tmp that does not exist yet.
+     */
+    fun newViewTempFile(): File {
+        return File(viewTempDir, UUID.randomUUID().toString() + VIEW_FILE_SUFFIX)
+    }
+
+    /**
      * Where a document's encrypted file lives.
      *
      * @param documentId The document's id (a UUID).
@@ -313,6 +325,9 @@ class FileCrypto(
 
     private companion object {
         const val END_OF_STREAM = -1
+
+        /** Ending of a decrypted PDF in view_tmp (PdfRenderer does not care, but it helps debugging). */
+        const val VIEW_FILE_SUFFIX = ".pdf"
 
         /**
          * Largest encrypted file we accept. Tink adds about 16 bytes per 4 KB chunk plus a small

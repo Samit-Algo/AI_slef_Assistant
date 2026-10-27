@@ -73,6 +73,21 @@ const val MAX_DISPLAY_NAME_CHARACTERS: Int = 60
  */
 const val PREVIEW_MAX_PIXELS: Int = 1600
 
+/** Most the viewer zooms in (owner decision, Task 1.8b). */
+const val VIEWER_MAX_ZOOM: Float = 4f
+
+/** Documents are drawn at this many times the screen size, so they stay sharp when zoomed in. */
+const val VIEWER_RENDER_SCALE: Int = 2
+
+/** Longest side, in pixels, of any picture the viewer makes (owner decision, Task 1.8b). */
+const val VIEWER_MAX_SIDE_PIXELS: Int = 4096
+
+/**
+ * Most pixels in any picture the viewer makes (owner decision, Task 1.8b): about 32 MB at 4 bytes
+ * per pixel, so one strange, huge page cannot run the phone out of memory.
+ */
+const val VIEWER_MAX_PIXELS: Long = 8_000_000L
+
 /** Bytes in one megabyte, so file size limits can be written in megabytes. */
 private const val BYTES_PER_MEGABYTE: Long = 1024L * 1024L
 

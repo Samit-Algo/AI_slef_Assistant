@@ -1,7 +1,10 @@
 package com.heybuddy.data
 
+import com.heybuddy.files.DetectedFileType
 import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
+import com.heybuddy.security.VerifiedBytes
+import com.heybuddy.security.VerifiedFile
 import com.heybuddy.security.LockStatus
 import com.heybuddy.security.VaultLockState
 import com.heybuddy.util.LogEvent
@@ -42,6 +45,30 @@ data class DocumentSummary(
     val createdAt: Long,
     val updatedAt: Long,
 )
+
+/** No document with this id exists (for example it was deleted on another screen). */
+class DocumentNotFoundException : NoSuchElementException("Document not found")
+
+/** A document decrypted and verified for the viewer. The viewer must release it when it closes. */
+sealed interface OpenedDocument {
+
+    /** The document's details (no key). */
+    val summary: DocumentSummary
+
+    /**
+     * A photo, verified to the end, in memory.
+     *
+     * @property bytes The verified file bytes. Wipe them as soon as the picture is decoded.
+     */
+    data class Image(override val summary: DocumentSummary, val bytes: VerifiedBytes) : OpenedDocument
+
+    /**
+     * A PDF, verified to the end, in view_tmp (rule 6). Delete it when the viewer closes.
+     *
+     * @property file The verified file.
+     */
+    data class Pdf(override val summary: DocumentSummary, val file: VerifiedFile) : OpenedDocument
+}
 
 /**
  * The only class screens use for documents (spec 5.7).
@@ -114,6 +141,36 @@ class VaultRepository(
                 if (status == LockStatus.UNLOCKED) observeWhileUnlocked() else flowOf(LIST_ENDED)
             }
             .takeWhile { documents -> documents !== LIST_ENDED }
+    }
+
+    /**
+     * Decrypts a document for viewing, fully verified (rule 6, Task 1.5).
+     *
+     * Needs the master key to unwrap the document's key, so after the 30-second window it throws
+     * UserNotAuthenticatedException; call it through MasterKeyAccess, which asks once and retries.
+     * Only the row is read under the database lock; the (slower) decryption runs outside it.
+     *
+     * @param documentId The document's id.
+     * @return The verified document. The caller must release it (wipe bytes / delete the file).
+     * @throws DocumentNotFoundException If there is no such document.
+     * @throws com.heybuddy.security.DocumentUnreadableException If the file fails verification.
+     * @throws VaultLockedException If the vault is locked.
+     */
+    suspend fun openDocument(documentId: String): OpenedDocument {
+        return withContext(ioDispatcher) {
+            val entity = holder.withDatabase { database -> database.documentDao().findById(documentId) }
+                ?: throw DocumentNotFoundException()
+            val documentKey = keyWrapper.unwrapDocumentKey(entity.wrappedKey, documentId)
+            val summary = entity.toSummary()
+            if (entity.mimeType == DetectedFileType.PDF.mimeType) {
+                val destination = fileCrypto.newViewTempFile()
+                val file = fileCrypto.decryptVerifiedToFile(documentId, documentKey, destination)
+                OpenedDocument.Pdf(summary, file)
+            } else {
+                val bytes = fileCrypto.decryptVerified(documentId, documentKey)
+                OpenedDocument.Image(summary, bytes)
+            }
+        }
     }
 
     /**

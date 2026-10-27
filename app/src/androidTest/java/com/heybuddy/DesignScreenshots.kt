@@ -35,7 +35,18 @@ import com.heybuddy.ui.theme.HeyBuddyTheme
 import com.heybuddy.ui.unlock.NoScreenLockScreen
 import com.heybuddy.ui.unlock.UnlockScreen
 import com.heybuddy.ui.unlock.UnlockUiState
-import com.heybuddy.ui.vault.VaultHomePlaceholder
+import com.heybuddy.data.DocumentSummary
+import com.heybuddy.data.TestVault
+import com.heybuddy.ui.vault.VaultListScreen
+import com.heybuddy.ui.viewer.PdfPageRenderer
+import com.heybuddy.ui.viewer.RenameDialogState
+import com.heybuddy.ui.viewer.ViewerActions
+import com.heybuddy.ui.viewer.ViewerScreen
+import com.heybuddy.ui.viewer.ViewerStage
+import com.heybuddy.ui.viewer.ViewerUiState
+import kotlinx.coroutines.runBlocking
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -64,7 +75,6 @@ class DesignScreenshots {
             "02_unlock_error" to { UnlockScreen(UnlockUiState(errorMessage = com.heybuddy.R.string.unlock_error_cancelled), unlockSucceeded = false, onUnlockClick = {}) },
             "03_unlock_success" to { UnlockScreen(UnlockUiState(), unlockSucceeded = true, onUnlockClick = {}) },
             "04_no_screen_lock" to { NoScreenLockScreen() },
-            "05_vault_placeholder" to { VaultHomePlaceholder(documentCount = 2, onAddDocument = {}) },
             "06_add_choose" to { AddScreenSample(AddDocumentUiState()) },
             "07_add_ready" to {
                 AddScreenSample(AddDocumentUiState(stage = AddStage.READY, preview = samplePreview, documentType = DocumentType.PHOTO, name = "Sample photo"))
@@ -77,12 +87,84 @@ class DesignScreenshots {
             "11_add_saved" to { AddScreenSample(AddDocumentUiState(stage = AddStage.SAVED)) },
             "12_components" to { ComponentSheet() },
         )
+        captureAll(outputDir, screens)
+    }
+
+    /** Task 1.8b: the vault list and the viewer, with fake sample documents only. */
+    @Test
+    fun captureVaultListAndViewer() {
+        val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_1_8b")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        val samplePhoto = drawSamplePreview()
+        val samplePdfPage = renderSamplePdfPage(pageIndex = 1)
+        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", picture = samplePhoto)
+        val viewingPdf = ViewerUiState(
+            stage = ViewerStage.READY,
+            title = "Sample certificate",
+            isPdf = true,
+            picture = samplePdfPage,
+            pageIndex = 1,
+            pageCount = 2,
+        )
+        val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "01_list_3_documents" to { VaultListScreen(documents = sampleDocuments(), onOpenDocument = {}, onAddDocument = {}) },
+            "02_list_empty" to { VaultListScreen(documents = emptyList(), onOpenDocument = {}, onAddDocument = {}) },
+            "03_viewer_opening" to { ViewerScreen(ViewerUiState(title = "Sample photo"), noViewerActions()) },
+            "04_viewer_photo" to { ViewerScreen(viewingPhoto, noViewerActions()) },
+            "05_viewer_pdf_page_2" to { ViewerScreen(viewingPdf, noViewerActions()) },
+            "06_viewer_rename_dialog" to {
+                ViewerScreen(viewingPhoto.copy(rename = RenameDialogState(text = "Sample photo")), noViewerActions())
+            },
+            "07_viewer_rename_error" to {
+                ViewerScreen(viewingPhoto.copy(rename = RenameDialogState(text = "", problem = DisplayNameProblem.EMPTY)), noViewerActions())
+            },
+            "08_viewer_cannot_open" to {
+                ViewerScreen(
+                    ViewerUiState(stage = ViewerStage.FAILED, title = "Sample photo", errorMessage = com.heybuddy.R.string.viewer_error_unreadable),
+                    noViewerActions(),
+                )
+            },
+            "09_viewer_confirm_needed" to {
+                ViewerScreen(
+                    ViewerUiState(stage = ViewerStage.FAILED, title = "Sample photo", errorMessage = com.heybuddy.R.string.viewer_error_confirm, canRetry = true),
+                    noViewerActions(),
+                )
+            },
+        )
+        captureAll(folder, screens)
+    }
+
+    private fun captureAll(folder: File, screens: List<Pair<String, @Composable () -> Unit>>) {
         for (dark in listOf(false, true)) {
             for ((name, screen) in screens) {
                 val themeName = if (dark) "dark" else "light"
-                capture("${name}_$themeName", dark, screen)
+                capture(folder, "${name}_$themeName", dark, screen)
             }
         }
+    }
+
+    /** Three fake documents, newest first (sample names only). */
+    private fun sampleDocuments(): List<DocumentSummary> {
+        val added = ZonedDateTime.of(2026, 10, 27, 17, 0, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        return listOf(
+            DocumentSummary("a", "Sample photo (WEBP)", DocumentType.PHOTO, "image/webp", 8_754, added, added),
+            DocumentSummary("b", "Sample certificate", DocumentType.CERTIFICATE, "application/pdf", 82_960, added, added),
+            DocumentSummary("c", "Sample photo", DocumentType.PHOTO, "image/jpeg", 47_749, added, added),
+        )
+    }
+
+    private fun noViewerActions(): ViewerActions = ViewerActions({}, {}, {}, {}, {}, {}, {}, {})
+
+    /** Page of a fake 2-page PDF ("Sample page 2"), drawn by the app's own page renderer. */
+    private fun renderSamplePdfPage(pageIndex: Int): Bitmap {
+        val pdfFile = File(instrumentation.targetContext.cacheDir, "screenshot_sample.pdf")
+        pdfFile.writeBytes(TestVault.sampleTwoPagePdfBytes())
+        val renderer = PdfPageRenderer(pdfFile)
+        val page = runBlocking { renderer.renderPage(pageIndex, SCREEN_WIDTH_PIXELS) }
+        renderer.close()
+        pdfFile.delete()
+        return checkNotNull(page)
     }
 
     @Composable
@@ -90,7 +172,7 @@ class DesignScreenshots {
         AddDocumentScreen(uiState = state, onFilePicked = {}, onTypeChosen = {}, onNameChanged = {}, onSaveClick = {}, onClose = {})
     }
 
-    private fun capture(fileName: String, dark: Boolean, screen: @Composable () -> Unit) {
+    private fun capture(folder: File, fileName: String, dark: Boolean, screen: @Composable () -> Unit) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent { HeyBuddyTheme(darkTheme = dark) { screen() } }
@@ -102,7 +184,7 @@ class DesignScreenshots {
             instrumentation.waitForIdleSync()
             Thread.sleep(SETTLE_MILLIS)
             val screenshot = instrumentation.uiAutomation.takeScreenshot()
-            File(outputDir, "$fileName.png").outputStream().use { output ->
+            File(folder, "$fileName.png").outputStream().use { output ->
                 screenshot.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, output)
             }
         }
@@ -126,6 +208,7 @@ class DesignScreenshots {
         /** Lets fonts, images and any first animation finish before the picture is taken. */
         const val SETTLE_MILLIS = 900L
         const val PNG_QUALITY = 100
+        const val SCREEN_WIDTH_PIXELS = 1080
     }
 }
 
