@@ -13,6 +13,12 @@ package com.heybuddy.util
  */
 const val VAULT_UNLOCK_WINDOW_SECONDS: Int = 30
 
+/** Name of the vault's master key inside Android Keystore (rule 2). Changing it would orphan existing vaults. */
+const val MASTER_KEY_ALIAS: String = "hb_master_key"
+
+/** Master key size. AES-256 is the strongest AES size Keystore supports (rule 2). */
+const val MASTER_KEY_SIZE_BITS: Int = 256
+
 /** How long (in seconds) the app may sit with no touches before it locks itself (rule 9). */
 const val IDLE_LOCK_SECONDS: Int = 120
 

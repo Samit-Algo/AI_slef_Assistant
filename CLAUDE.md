@@ -17,6 +17,18 @@
 5. **No new libraries.** Only the libraries in spec section 5.9. Ask before adding anything else. Ask before using a pre-release version.
 6. **After each task, report:** what you built, how to test it, and which "Done when" checks pass (and any that do not).
 
+## Git rules
+
+- After the owner approves a task's report, commit with the message `Task X.Y: <short name>` and push to `origin/main`.
+- Before committing, run `git status`. If any file is outside the project's normal folders, or could contain a secret, key, password, token or personal document, STOP and show the owner instead of committing.
+- Never force-push.
+
+## Testing on the owner's phone
+
+- Allowed without asking: `adb devices`, install, launch, read logcat, run tests.
+- Ask first: uninstalling the app, clearing app data, or any other adb command that changes the phone.
+- Run instrumented tests with `adb shell am instrument`, not Gradle's `connectedAndroidTest`, because that one uninstalls the app afterwards.
+
 ## Always true
 
 - The app has **no INTERNET permission**, ever.

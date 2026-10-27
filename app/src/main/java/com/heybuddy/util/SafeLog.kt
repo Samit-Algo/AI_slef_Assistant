@@ -13,6 +13,9 @@ import com.heybuddy.BuildConfig
  */
 enum class LogEvent(val message: String) {
     APP_STARTED("App started"),
+    MASTER_KEY_CREATED_STRONGBOX("Master key created in StrongBox"),
+    MASTER_KEY_CREATED_TEE("StrongBox not available; master key created in normal secure hardware"),
+    MASTER_KEY_DELETED("Master key deleted"),
 }
 
 /**
