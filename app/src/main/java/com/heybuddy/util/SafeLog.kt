@@ -16,6 +16,12 @@ enum class LogEvent(val message: String) {
     MASTER_KEY_CREATED_STRONGBOX("Master key created in StrongBox"),
     MASTER_KEY_CREATED_TEE("StrongBox not available; master key created in normal secure hardware"),
     MASTER_KEY_DELETED("Master key deleted"),
+    MASTER_KEY_CREATE_FAILED("Master key could not be created"),
+    UNLOCK_CANCELLED("Unlock cancelled"),
+    UNLOCK_FINGERPRINT_LOCKOUT("Fingerprint lockout"),
+    UNLOCK_PROMPT_ERROR_OTHER("Unlock prompt error (other)"),
+    UNLOCK_PROOF_FAILED("Unlock prompt succeeded but the master key was not usable"),
+    VAULT_UNLOCKED("Vault unlocked"),
 }
 
 /**

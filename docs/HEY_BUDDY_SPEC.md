@@ -235,7 +235,7 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.7 Add document** | Picker, `FileTypeDetector` (rule 11), type + name form, save flow | Adding JPEG/PNG/WEBP/PDF works; a .txt renamed to .pdf is rejected |
 | **1.8 Vault list + viewer** | List screen, image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner` | Viewing works; `view_tmp` is empty after closing and after restart |
 | **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14) | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
-| **1.10 Delete + settings** | Delete one, Delete everything (rule 13), Settings screen | After "Delete everything": no files, no DB, no Keystore key |
+| **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6) | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
 | **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met | Owner approves the report |
 
 ### 5.11 Manual security checks (owner does these at the end of Phase 1)
@@ -253,6 +253,14 @@ Use the latest stable versions at the time of building; confirm with the owner i
 - All tasks 1.1–1.11 done and approved
 - All 15 security rules in 5.5 met and listed in `docs/PHASE1_REPORT.md`
 - All manual checks in 5.11 pass on at least one real phone (not only the emulator)
+- All items in 5.13 are tested and closed
+
+### 5.13 Open test items (must be closed before Phase 1 ends)
+
+| Item | From task | Why still open | How to close it |
+| --- | --- | --- | --- |
+| Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | In Task 1.11, on the Android emulator with a virtual fingerprint: unlock with fingerprint and confirm "Vault unlocked" in logcat |
+| Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | In Task 1.11, on the emulator: use a wrong virtual finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
 
 ---
 

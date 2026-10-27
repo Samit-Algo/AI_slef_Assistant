@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hey Buddy</string>
-    <string name="placeholder_message">Setup is working. The vault comes next.</string>
+
+    <!-- Unlock screen -->
+    <string name="unlock_button">Unlock with fingerprint or PIN</string>
+    <string name="unlock_prompt_title">Unlock Hey Buddy</string>
+    <string name="unlock_prompt_subtitle">Use your fingerprint or your phone\'s PIN, pattern or password</string>
+    <string name="unlock_note_no_fingerprint">No fingerprint is set up. You can unlock with your PIN, pattern or password.</string>
+
+    <!-- Unlock failure messages: simple English, and each says what to do next -->
+    <string name="unlock_error_cancelled">Unlock cancelled. Tap Unlock to try again.</string>
+    <string name="unlock_error_too_many_tries">Too many fingerprint tries. Tap Unlock and use your PIN, pattern or password instead.</string>
+    <string name="unlock_error_fingerprint_locked">Fingerprint is locked. Unlock your phone with your PIN first, then try again.</string>
+    <string name="unlock_error_key_not_usable">Hey Buddy couldn\'t open its secure key. Please try unlocking again.</string>
+    <string name="unlock_error_other">Unlock didn\'t work. Please try again.</string>
+
+    <!-- No screen lock screen (rule 10) -->
+    <string name="no_lock_title">Set a screen lock first</string>
+    <string name="no_lock_body">Hey Buddy keeps your documents locked with your phone\'s security chip. That chip only works when your phone has a screen lock (PIN, pattern or password).\n\nPlease set a screen lock, then come back to Hey Buddy.</string>
+    <string name="no_lock_button">Open security settings</string>
+
+    <!-- Temporary screen until the vault list arrives in Task 1.8 -->
+    <string name="vault_unlocked_placeholder">Vault unlocked. Your documents will appear here.</string>
 </resources>

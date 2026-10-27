@@ -1,7 +1,9 @@
 package com.heybuddy
 
 import android.content.Context
+import com.heybuddy.security.BiometricUnlocker
 import com.heybuddy.security.MasterKeyManager
+import com.heybuddy.security.VaultLockState
 
 /**
  * Creates and holds the app's shared objects (manual dependency injection, spec section 2).
@@ -15,4 +17,10 @@ class AppContainer(private val appContext: Context) {
 
     /** The one manager for the vault's Keystore master key. */
     val masterKeyManager: MasterKeyManager = MasterKeyManager()
+
+    /** The app's own lock. Starts locked every time the process starts. */
+    val vaultLockState: VaultLockState = VaultLockState()
+
+    /** Shows the fingerprint/PIN prompt and opens [vaultLockState] after a proven unlock. */
+    val biometricUnlocker: BiometricUnlocker = BiometricUnlocker(masterKeyManager, vaultLockState)
 }
