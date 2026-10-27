@@ -58,6 +58,15 @@ const val DECRYPTING_PART_SUFFIX: String = ".part"
 /** Bytes copied per step while streaming. 8 KB keeps memory use tiny and still copies quickly. */
 const val STREAM_BUFFER_BYTES: Int = 8 * 1024
 
+/** File name of the SQLCipher database (in the app-private databases folder). Renaming it orphans the vault. */
+const val VAULT_DATABASE_NAME: String = "vault.db"
+
+/**
+ * Longest document name, in characters. Fits one line of the vault list; real names such as
+ * "Aadhaar card - front (2024)" are well under half of this.
+ */
+const val MAX_DISPLAY_NAME_CHARACTERS: Int = 60
+
 /** Bytes in one megabyte, so file size limits can be written in megabytes. */
 private const val BYTES_PER_MEGABYTE: Long = 1024L * 1024L
 

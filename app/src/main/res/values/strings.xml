@@ -20,6 +20,12 @@
     <string name="reauth_prompt_subtitle">Use your fingerprint or PIN to continue</string>
     <string name="key_access_confirm_again">Please confirm it\'s you to continue. Tap to try again.</string>
 
+    <!-- Document name problems -->
+    <string name="name_error_empty">Please give the document a name.</string>
+    <string name="name_error_too_long">The name is too long. Please use 60 characters or fewer.</string>
+    <string name="name_error_control_character">The name can\'t contain line breaks or tabs. Please type it on one line.</string>
+    <string name="name_error_invisible_formatting">The name contains hidden formatting characters. Please type the name again.</string>
+
     <!-- No screen lock screen (rule 10) -->
     <string name="no_lock_title">Set a screen lock first</string>
     <string name="no_lock_body">Hey Buddy keeps your documents locked with your phone\'s security chip. That chip only works when your phone has a screen lock (PIN, pattern or password).\n\nPlease set a screen lock, then come back to Hey Buddy.</string>

@@ -26,6 +26,13 @@ enum class LogEvent(val message: String) {
     DB_PASSPHRASE_CLEARED("Database passphrase wiped from memory"),
     KEY_REAUTH_REQUESTED("Unlock window expired; asking for fingerprint/PIN again"),
     KEY_REAUTH_DECLINED("Fingerprint/PIN not confirmed; key action not retried"),
+    DB_PASSPHRASE_WARM_FAILED("Could not prepare the database passphrase after unlock"),
+    DATABASE_OPENED("Vault database opened"),
+    DATABASE_CLOSED("Vault database closed"),
+    DOCUMENT_SAVED("Document saved"),
+    DOCUMENT_SAVE_ROLLED_BACK("Document save failed; its encrypted file was removed"),
+    DOCUMENT_RENAMED("Document renamed"),
+    DOCUMENT_DELETED("Document deleted"),
 }
 
 /**

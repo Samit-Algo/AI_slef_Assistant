@@ -4,4 +4,5 @@ plugins {
     // which AGP's built-in Kotlin support then uses.
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
 }

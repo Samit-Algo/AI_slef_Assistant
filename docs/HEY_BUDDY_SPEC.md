@@ -235,7 +235,7 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.7 Add document** | Picker, `FileTypeDetector` (rule 11), type + name form, save flow | Adding JPEG/PNG/WEBP/PDF works; a .txt renamed to .pdf is rejected |
 | **1.8 Vault list + viewer** | List screen, image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner` | Viewing works; `view_tmp` is empty after closing and after restart |
 | **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14) | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
-| **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6) | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
+| **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6). Also: clean up orphan `.bin` files (a `.bin` with no row, left by a crash). **Note:** this cleanup must only run while no save is in progress, using the same database lock (`VaultDatabaseHolder.withDatabase`), because during a save a `.bin` exists briefly before its row | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
 | **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met | Owner approves the report |
 
 ### 5.11 Manual security checks (owner does these at the end of Phase 1)
