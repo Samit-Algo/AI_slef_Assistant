@@ -1,6 +1,7 @@
 package com.heybuddy
 
 import android.app.Application
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.heybuddy.util.LogEvent
 import com.heybuddy.util.SafeLog
 
@@ -15,6 +16,8 @@ class HeyBuddyApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Tink must know the streaming AEAD key type before any document key is created or read.
+        StreamingAeadConfig.register()
         container = AppContainer(appContext = this)
         SafeLog.info(LogEvent.APP_STARTED)
     }

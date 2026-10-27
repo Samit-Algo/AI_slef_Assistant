@@ -75,7 +75,39 @@ class BiometricUnlocker(
             onResult(UnlockResult.Failed(UnlockFailure.KEY_NOT_USABLE))
             return
         }
-        showPrompt(activity, title, subtitle, onResult)
+        val callback = createUnlockCallback(onResult)
+        showPrompt(activity, title, subtitle, callback)
+    }
+
+    /**
+     * Asks the user to confirm with fingerprint/PIN again, without changing the vault lock.
+     * Used by [MasterKeyAccess] when the 30-second window has expired.
+     *
+     * @param activity The activity that shows the prompt.
+     * @param title Prompt title shown to the user.
+     * @param subtitle Prompt subtitle shown to the user.
+     * @param onConfirmed Called once if the user confirmed.
+     * @param onDeclined Called once if the user cancelled or the prompt failed.
+     */
+    fun confirmIdentity(
+        activity: FragmentActivity,
+        title: String,
+        subtitle: String,
+        onConfirmed: () -> Unit,
+        onDeclined: () -> Unit,
+    ) {
+        val callback = object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                onConfirmed()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                val reason = failureForPromptError(errorCode)
+                SafeLog.info(logEventForFailure(reason))
+                onDeclined()
+            }
+        }
+        showPrompt(activity, title, subtitle, callback)
     }
 
     /**
@@ -115,11 +147,12 @@ class BiometricUnlocker(
         }
     }
 
+    // The callback must not hold the activity: the prompt can outlive it (for example on rotation).
     private fun showPrompt(
         activity: FragmentActivity,
         title: String,
         subtitle: String,
-        onResult: (UnlockResult) -> Unit,
+        callback: BiometricPrompt.AuthenticationCallback,
     ) {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
@@ -127,13 +160,11 @@ class BiometricUnlocker(
             .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
             .build()
         val executor = ContextCompat.getMainExecutor(activity)
-        // The callback must not hold the activity: the prompt can outlive it (for example on rotation).
-        val callback = createPromptCallback(onResult)
         val prompt = BiometricPrompt(activity, executor, callback)
         prompt.authenticate(promptInfo)
     }
 
-    private fun createPromptCallback(onResult: (UnlockResult) -> Unit): BiometricPrompt.AuthenticationCallback {
+    private fun createUnlockCallback(onResult: (UnlockResult) -> Unit): BiometricPrompt.AuthenticationCallback {
         return object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 val unlockResult = finishUnlockAfterPrompt()

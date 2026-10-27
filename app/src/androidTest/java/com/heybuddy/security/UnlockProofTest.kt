@@ -1,9 +1,6 @@
 package com.heybuddy.security
 
-import android.view.WindowManager
-import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.heybuddy.MainActivity
 import com.heybuddy.util.VAULT_UNLOCK_WINDOW_SECONDS
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -40,13 +37,7 @@ class UnlockProofTest {
      */
     @Test
     fun proofFailsOnceTheAuthWindowHasExpired() {
-        // Keep the screen on, so a phone lock during the wait cannot be mistaken for an expired window.
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-            checkProofFailsAfterWindow()
-        }
+        withScreenKeptOn { checkProofFailsAfterWindow() }
     }
 
     private fun checkProofFailsAfterWindow() {

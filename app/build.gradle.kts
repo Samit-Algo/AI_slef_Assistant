@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.biometric)
+    implementation(libs.tink.android)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

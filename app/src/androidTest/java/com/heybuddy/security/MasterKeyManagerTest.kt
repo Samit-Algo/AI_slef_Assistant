@@ -2,10 +2,7 @@ package com.heybuddy.security
 
 import android.security.keystore.KeyProperties
 import android.security.keystore.UserNotAuthenticatedException
-import android.view.WindowManager
-import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.heybuddy.MainActivity
 import com.heybuddy.util.MASTER_KEY_SIZE_BITS
 import com.heybuddy.util.VAULT_UNLOCK_WINDOW_SECONDS
 import org.junit.After
@@ -114,14 +111,7 @@ class MasterKeyManagerTest {
      */
     @Test
     fun keyIsRefusedOnceTheAuthWindowHasExpired() {
-        // If the screen turns off and the phone locks during the wait, Keystore refuses with
-        // "device locked" instead, which would not prove that the 30-second window expired.
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-            checkKeyIsRefusedAfterWindow()
-        }
+        withScreenKeptOn { checkKeyIsRefusedAfterWindow() }
     }
 
     private fun checkKeyIsRefusedAfterWindow() {

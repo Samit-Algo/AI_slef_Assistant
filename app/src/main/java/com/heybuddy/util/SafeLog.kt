@@ -22,6 +22,10 @@ enum class LogEvent(val message: String) {
     UNLOCK_PROMPT_ERROR_OTHER("Unlock prompt error (other)"),
     UNLOCK_PROOF_FAILED("Unlock prompt succeeded but the master key was not usable"),
     VAULT_UNLOCKED("Vault unlocked"),
+    DB_PASSPHRASE_CREATED("Database passphrase created and saved in wrapped form"),
+    DB_PASSPHRASE_CLEARED("Database passphrase wiped from memory"),
+    KEY_REAUTH_REQUESTED("Unlock window expired; asking for fingerprint/PIN again"),
+    KEY_REAUTH_DECLINED("Fingerprint/PIN not confirmed; key action not retried"),
 }
 
 /**

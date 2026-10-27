@@ -42,8 +42,14 @@ enum class KeyStorageLevel {
  *
  * @param keyAlias Name of the key in Keystore. The app uses [MASTER_KEY_ALIAS]; tests pass
  *   a different name so they can never delete the real vault key.
+ * @param requireUserAuthentication ONLY TESTS may set this to false. It lets logic tests use a
+ *   key that does not depend on the 30-second fingerprint/PIN window. The app always uses true.
  */
-class MasterKeyManager(private val keyAlias: String = MASTER_KEY_ALIAS) {
+class MasterKeyManager(
+    /** Name of the key in Keystore. */
+    val keyAlias: String = MASTER_KEY_ALIAS,
+    private val requireUserAuthentication: Boolean = true,
+) {
 
     // Stops two callers from both seeing "no key" and creating two different keys.
     private val creationLock = Any()
@@ -136,23 +142,27 @@ class MasterKeyManager(private val keyAlias: String = MASTER_KEY_ALIAS) {
         val purposes = KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
         val allowedAuthTypes = KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
 
-        return KeyGenParameterSpec.Builder(keyAlias, purposes)
+        val builder = KeyGenParameterSpec.Builder(keyAlias, purposes)
             .setKeySize(MASTER_KEY_SIZE_BITS)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             // Keystore picks a fresh random IV for every encryption. Our code must never
             // supply its own IV: reusing one with GCM would break the encryption.
             .setRandomizedEncryptionRequired(true)
-            .setUserAuthenticationRequired(true)
-            .setUserAuthenticationParameters(VAULT_UNLOCK_WINDOW_SECONDS, allowedAuthTypes)
-            // PIN unlock is allowed too, so wiping the key when a new fingerprint is added
-            // gives little extra security but would destroy the whole vault (there is no backup).
-            // Removing the screen lock still invalidates the key; Task 1.9 handles that (rule 14).
-            .setInvalidatedByBiometricEnrollment(false)
             // The key cannot be used while the phone is locked, even inside the 30-second window.
             .setUnlockedDeviceRequired(true)
             .setIsStrongBoxBacked(useStrongBox)
-            .build()
+
+        if (requireUserAuthentication) {
+            builder
+                .setUserAuthenticationRequired(true)
+                .setUserAuthenticationParameters(VAULT_UNLOCK_WINDOW_SECONDS, allowedAuthTypes)
+                // PIN unlock is allowed too, so wiping the key when a new fingerprint is added
+                // gives little extra security but would destroy the whole vault (there is no backup).
+                // Removing the screen lock still invalidates the key; Task 1.9 handles that (rule 14).
+                .setInvalidatedByBiometricEnrollment(false)
+        }
+        return builder.build()
     }
 
     private fun toStorageLevel(keyInfo: KeyInfo): KeyStorageLevel {
