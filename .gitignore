@@ -1,0 +1,30 @@
+# Local machine settings (contains this PC's SDK path)
+local.properties
+
+# Build output and caches
+build/
+app/build/
+.gradle/
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ (keep only shared code style files)
+.idea/*
+!.idea/codeStyles/
+*.iml
+
+# Signing keys and keystores: never commit these
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# Test documents and sample files (may hold personal data)
+test-docs/
+samples/
+
+# OS files
+.DS_Store
+Thumbs.db
