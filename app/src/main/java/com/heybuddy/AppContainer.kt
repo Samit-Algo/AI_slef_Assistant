@@ -1,6 +1,7 @@
 package com.heybuddy
 
 import android.content.Context
+import android.os.storage.StorageManager
 import com.heybuddy.data.VaultDatabaseHolder
 import com.heybuddy.data.VaultRepository
 import com.heybuddy.files.TempFileCleaner
@@ -10,11 +11,13 @@ import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
 import com.heybuddy.security.VaultLockState
+import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
 import com.heybuddy.util.VAULT_DATABASE_NAME
 import com.heybuddy.util.VAULT_FOLDER_NAME
 import com.heybuddy.util.VIEW_TEMP_FOLDER_NAME
 import java.io.File
+import java.io.IOException
 
 /**
  * Creates and holds the app's shared objects (manual dependency injection, spec section 2).
@@ -63,4 +66,21 @@ class AppContainer(private val appContext: Context) {
     /** The only class screens use for documents. */
     val vaultRepository: VaultRepository =
         VaultRepository(databaseHolder, vaultLockState, keyWrapper, fileCrypto)
+
+    /** Saves picked files into the vault. */
+    val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository, ::freeSpaceForVault)
+
+    // The vault folder lives inside filesDir, so filesDir's storage is the vault's storage.
+    // getAllocatableBytes also counts cache Android can clear on its own, so a nearly full phone
+    // is not wrongly told "storage full".
+    private fun freeSpaceForVault(): Long {
+        val filesDir = appContext.filesDir
+        val storageManager = appContext.getSystemService(StorageManager::class.java)
+        return try {
+            val storageId = storageManager.getUuidForPath(filesDir)
+            storageManager.getAllocatableBytes(storageId)
+        } catch (notAvailable: IOException) {
+            filesDir.usableSpace
+        }
+    }
 }

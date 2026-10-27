@@ -3,22 +3,14 @@ package com.heybuddy
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,8 +18,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.heybuddy.ui.TopScreen
+import com.heybuddy.ui.adddocument.AddDocumentScreen
+import com.heybuddy.ui.adddocument.AddDocumentViewModel
 import com.heybuddy.ui.chooseTopScreen
 import com.heybuddy.ui.theme.HeyBuddyTheme
+import com.heybuddy.ui.vault.VaultHomePlaceholder
 import com.heybuddy.ui.unlock.NoScreenLockScreen
 import com.heybuddy.ui.unlock.UnlockScreen
 import com.heybuddy.ui.unlock.UnlockViewModel
@@ -64,8 +59,65 @@ private fun AppRoot(container: AppContainer, activity: FragmentActivity) {
     when (chooseTopScreen(isDeviceSecure, lockStatus)) {
         TopScreen.NO_SCREEN_LOCK -> NoScreenLockScreen()
         TopScreen.UNLOCK -> UnlockRoute(container = container, activity = activity)
-        TopScreen.VAULT -> VaultUnlockedPlaceholder()
+        TopScreen.VAULT -> VaultRoute(container = container, activity = activity)
     }
+}
+
+/** Screens inside the unlocked vault. Navigation Compose replaces this in Task 1.8. */
+private enum class VaultScreen {
+    HOME,
+    ADD_DOCUMENT,
+}
+
+@Composable
+private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
+    // Not saved across a lock: this route leaves the screen on lock, so unlock starts at HOME.
+    var screen by rememberSaveable { mutableStateOf(VaultScreen.HOME) }
+    when (screen) {
+        VaultScreen.HOME -> {
+            val documents by remember { container.vaultRepository.observeDocuments() }
+                .collectAsStateWithLifecycle(initialValue = emptyList())
+            VaultHomePlaceholder(
+                documentCount = documents.size,
+                onAddDocument = { screen = VaultScreen.ADD_DOCUMENT },
+            )
+        }
+        VaultScreen.ADD_DOCUMENT -> AddDocumentRoute(
+            container = container,
+            activity = activity,
+            onClose = { screen = VaultScreen.HOME },
+        )
+    }
+}
+
+@Composable
+private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity, onClose: () -> Unit) {
+    val addViewModel: AddDocumentViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                AddDocumentViewModel(
+                    appContext = activity.applicationContext,
+                    saver = container.addDocumentSaver,
+                    unlocker = container.biometricUnlocker,
+                    lockState = container.vaultLockState,
+                )
+            }
+        },
+    )
+    val uiState by addViewModel.uiState.collectAsStateWithLifecycle()
+    val closeAndForget = {
+        addViewModel.reset()
+        onClose()
+    }
+    BackHandler(onBack = closeAndForget)
+    AddDocumentScreen(
+        uiState = uiState,
+        onFilePicked = addViewModel::onFilePicked,
+        onTypeChosen = addViewModel::onTypeChosen,
+        onNameChanged = addViewModel::onNameChanged,
+        onSaveClick = { addViewModel.onSaveClicked(activity) },
+        onClose = closeAndForget,
+    )
 }
 
 @Composable
@@ -86,25 +138,6 @@ private fun UnlockRoute(container: AppContainer, activity: FragmentActivity) {
         uiState = uiState,
         onUnlockClick = { unlockViewModel.onUnlockClicked(activity) },
     )
-}
-
-/** Temporary screen shown after unlock. Replaced by the vault list in Task 1.8. */
-@Composable
-private fun VaultUnlockedPlaceholder() {
-    Scaffold { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.vault_unlocked_placeholder),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
-    }
 }
 
 private fun isDeviceSecure(context: Context): Boolean {

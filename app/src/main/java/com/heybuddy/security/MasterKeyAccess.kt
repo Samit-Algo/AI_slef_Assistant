@@ -5,6 +5,12 @@ import androidx.annotation.StringRes
 import com.heybuddy.R
 import com.heybuddy.util.LogEvent
 import com.heybuddy.util.SafeLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /** Asks the user to confirm with fingerprint/PIN again. Lets tests use a fake prompt. */
 interface ReAuthPrompt {
@@ -51,8 +57,58 @@ sealed interface KeyAccessResult<out T> {
  * ONCE. It never crashes and never retries more than once.
  *
  * @param prompt Shows the fingerprint/PIN prompt.
+ * @param promptDispatcher Where [runSuspending] shows the prompt (the main thread in the app).
  */
-class MasterKeyAccess(private val prompt: ReAuthPrompt) {
+class MasterKeyAccess(
+    private val prompt: ReAuthPrompt,
+    private val promptDispatcher: CoroutineDispatcher = Dispatchers.Main,
+) {
+
+    /**
+     * Coroutine version of [run], with the same rules: on an expired window, ask once, retry once.
+     *
+     * @param action The work that uses the master key (for example VaultRepository.saveDocument).
+     *   It is run again after a confirmed prompt, so it must be safe to repeat.
+     * @return The outcome.
+     */
+    suspend fun <T> runSuspending(action: suspend () -> T): KeyAccessResult<T> {
+        val firstAttempt = attemptSuspending(action)
+        if (firstAttempt != null) return firstAttempt
+
+        SafeLog.info(LogEvent.KEY_REAUTH_REQUESTED)
+        val confirmed = withContext(promptDispatcher) { askAndWait() }
+        if (!confirmed) {
+            SafeLog.info(LogEvent.KEY_REAUTH_DECLINED)
+            return KeyAccessResult.NeedsConfirmation
+        }
+        val secondAttempt = attemptSuspending(action)
+        if (secondAttempt != null) return secondAttempt
+        // Still not authenticated right after confirming: stop here instead of looping.
+        SafeLog.info(LogEvent.KEY_REAUTH_DECLINED)
+        return KeyAccessResult.NeedsConfirmation
+    }
+
+    private suspend fun askAndWait(): Boolean {
+        return suspendCancellableCoroutine { continuation ->
+            prompt.ask(
+                onConfirmed = { if (continuation.isActive) continuation.resume(true) },
+                onDeclined = { if (continuation.isActive) continuation.resume(false) },
+            )
+        }
+    }
+
+    /** Runs the action once. Returns null only when the unlock window has expired. */
+    private suspend fun <T> attemptSuspending(action: suspend () -> T): KeyAccessResult<T>? {
+        return try {
+            val value = action()
+            KeyAccessResult.Success(value)
+        } catch (cancelled: CancellationException) {
+            // Cancellation is not a failure to report; it must keep travelling up.
+            throw cancelled
+        } catch (error: Exception) {
+            if (isMissingUserAuthentication(error)) null else KeyAccessResult.Failed(error)
+        }
+    }
 
     /**
      * Runs [action], asking for fingerprint/PIN and retrying once if the window has expired.

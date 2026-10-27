@@ -67,6 +67,12 @@ const val VAULT_DATABASE_NAME: String = "vault.db"
  */
 const val MAX_DISPLAY_NAME_CHARACTERS: Int = 60
 
+/**
+ * Longest side of a preview image, in pixels. Sharp on a phone screen, but small enough that a
+ * large photo (for example 4000 x 3000) never needs much memory to preview.
+ */
+const val PREVIEW_MAX_PIXELS: Int = 1600
+
 /** Bytes in one megabyte, so file size limits can be written in megabytes. */
 private const val BYTES_PER_MEGABYTE: Long = 1024L * 1024L
 

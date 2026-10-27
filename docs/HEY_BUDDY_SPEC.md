@@ -54,7 +54,7 @@ The user always reviews the values and presses Submit themselves.
 | **1. Secure vault** | Add, view, delete documents; encryption; biometric lock; no internet | Files are unreadable off the phone; app locks itself |
 | 2. Document reader | Camera capture, OCR, document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs |
 | 3. Autofill (text) | Autofill service + rules matcher + "Fill all" + review screen | Fills a test form in an app and in Chrome |
-| 4. File uploads | Documents provider (appears in file pickers), photo resize | Uploads photo + PDF on a real government portal |
+| 4. File uploads | Documents provider (appears in file pickers), photo resize. **Note:** photos can contain hidden details such as GPS location (EXIF). Strip this hidden data before any file is uploaded to a website | Uploads photo + PDF on a real government portal |
 | 5. On-device AI | AI matcher for unknown fields, confidence, site memory | Unusual labels filled correctly; unsure fields left empty |
 | 6. Voice + screen reading | Assist API reader, push-to-talk, optional wake word | Tells which documents a form needs, offline |
 | 7. Hardening + launch | Security review, phishing and prompt-injection tests, Play forms | No high-risk issues; Play review passed |
@@ -234,9 +234,9 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.6 Database** | Room + SQLCipher, `DocumentEntity`, `DocumentDao`, `VaultRepository` | Test: save, list, rename, delete work; DB file unreadable without passphrase |
 | **1.7 Add document** | Picker, `FileTypeDetector` (rule 11), type + name form, save flow | Adding JPEG/PNG/WEBP/PDF works; a .txt renamed to .pdf is rejected |
 | **1.8 Vault list + viewer** | List screen, image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner` | Viewing works; `view_tmp` is empty after closing and after restart |
-| **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14) | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
+| **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14). **Note:** the file pickers and the fingerprint/PIN prompt open other screens, which briefly puts Hey Buddy in the background; auto-lock must NOT lock the vault during these | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
 | **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6). Also: clean up orphan `.bin` files (a `.bin` with no row, left by a crash). **Note:** this cleanup must only run while no save is in progress, using the same database lock (`VaultDatabaseHolder.withDatabase`), because during a save a `.bin` exists briefly before its row | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
-| **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met | Owner approves the report |
+| **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met. **Reminder:** remind the owner to delete the `Download/HeyBuddyTest/` sample-files folder on the test phone, and ask before deleting it | Owner approves the report |
 
 ### 5.11 Manual security checks (owner does these at the end of Phase 1)
 
@@ -262,6 +262,13 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | In Task 1.11, on the Android emulator with a virtual fingerprint: unlock with fingerprint and confirm "Vault unlocked" in logcat |
 | Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | In Task 1.11, on the emulator: use a wrong virtual finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
 | Tink unwrap after the 30-second window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
+| **HIGHEST PRIORITY** — `fake_pdf.pdf` (text renamed to .pdf) is rejected: NOT TESTED YET on the phone | 1.7 | Owner approved Task 1.7 after testing one image and one PDF. Covered by automated tests (`FileTypeDetectorTest`), not yet by hand | In Task 1.11, with the files in `Download/HeyBuddyTest/`: pick it; expect "Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files…" and the document count unchanged |
+| **HIGHEST PRIORITY** — `broken_photo.jpg` (right first bytes, damaged after) is rejected: NOT TESTED YET | 1.7 | Same as above. No automated test decodes a real damaged image | In Task 1.11: pick it; expect "This image seems to be damaged…" and the count unchanged |
+| **HIGHEST PRIORITY** — `too_large.jpg` (21,000,000 bytes) is rejected: NOT TESTED YET on the phone | 1.7 | Same as above. Size limit covered by automated tests (`PickedFileReaderTest`, `FileCryptoTest`), not yet through the picker | In Task 1.11: pick it; expect "This file is larger than 20 MB…" and the count unchanged |
+| `sample_photo.png` and `sample_photo.webp` save correctly: NOT TESTED YET | 1.7 | Owner tested one image (JPEG) and one PDF only | In Task 1.11: add both; each shows a preview, saves, and the count goes up by 1 |
+| Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, wait 40 seconds, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
+| Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | In Task 1.11: clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
+| Check C: "Choose a photo" opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose a photo"; the photo picker opens with no permission question |
 
 ---
 

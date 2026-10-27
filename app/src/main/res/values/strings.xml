@@ -32,5 +32,50 @@
     <string name="no_lock_button">Open security settings</string>
 
     <!-- Temporary screen until the vault list arrives in Task 1.8 -->
-    <string name="vault_unlocked_placeholder">Vault unlocked. Your documents will appear here.</string>
+    <plurals name="vault_unlocked_count">
+        <item quantity="one">Vault unlocked. %d document saved.</item>
+        <item quantity="other">Vault unlocked. %d documents saved.</item>
+    </plurals>
+    <string name="add_document_button">Add document</string>
+
+    <!-- Document types: dropdown labels -->
+    <string name="type_label_aadhaar">Aadhaar card</string>
+    <string name="type_label_pan">PAN card</string>
+    <string name="type_label_driving_licence">Driving licence</string>
+    <string name="type_label_passport">Passport</string>
+    <string name="type_label_photo">Photo</string>
+    <string name="type_label_signature">Signature</string>
+    <string name="type_label_certificate">Certificate</string>
+    <string name="type_label_other">Other</string>
+    <!-- Default name for "Other" (the label alone would read oddly as a name) -->
+    <string name="type_default_name_other">Document</string>
+
+    <!-- Add document screen -->
+    <string name="add_title">Add document</string>
+    <string name="add_intro">Hey Buddy reads the file once and keeps an encrypted copy. It never needs access to your other files.</string>
+    <string name="add_choose_photo">Choose a photo</string>
+    <string name="add_choose_file">Choose a PDF or file</string>
+    <string name="add_reading">Reading the file…</string>
+    <string name="add_preview_unavailable">Preview not available for this PDF. You can still save it.</string>
+    <string name="add_preview_description">Preview of the chosen file</string>
+    <string name="add_pdf_badge">PDF</string>
+    <string name="add_type_label">Document type</string>
+    <string name="add_type_placeholder">Choose a type</string>
+    <string name="add_name_label">Name</string>
+    <string name="add_save_button">Save to vault</string>
+    <string name="add_choose_other_file">Choose a different file</string>
+    <string name="add_cancel">Cancel</string>
+    <string name="add_saving">Saving to your vault…</string>
+    <string name="add_saved_note">Saved to your vault. The original file is still in your phone\'s gallery or downloads. Delete it there if you want it only in Hey Buddy.</string>
+    <string name="add_done">Done</string>
+
+    <!-- Add document failures: simple English, and each says what to do next -->
+    <string name="add_error_wrong_type">Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files. Please choose a different file.</string>
+    <string name="add_error_too_large">This file is larger than 20 MB. Please choose a smaller file.</string>
+    <string name="add_error_damaged_image">This image seems to be damaged. Please choose a different file.</string>
+    <string name="add_error_unreadable">Hey Buddy couldn\'t read this file. Please choose it again.</string>
+    <string name="add_error_vault_locked">Your vault locked. Unlock it and try again.</string>
+    <string name="add_error_confirmation_needed">Please confirm it\'s you to save. Tap Save to try again.</string>
+    <string name="add_error_storage_full">Your phone is out of storage space. Free up some space and try again.</string>
+    <string name="add_error_other">Something went wrong. Your document was not saved. Please try again.</string>
 </resources>
