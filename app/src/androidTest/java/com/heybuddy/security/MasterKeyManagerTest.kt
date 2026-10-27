@@ -30,18 +30,27 @@ import javax.crypto.SecretKey
 @RunWith(AndroidJUnit4::class)
 class MasterKeyManagerTest {
 
+    // Same settings as the app's key (5-minute window).
     private val manager = MasterKeyManager(keyAlias = TEST_KEY_ALIAS)
+
+    // Same rules but a short window, so the expiry test does not have to wait 5 minutes.
+    private val shortWindowManager = MasterKeyManager(
+        keyAlias = SHORT_WINDOW_KEY_ALIAS,
+        authWindowSeconds = TEST_AUTH_WINDOW_SECONDS,
+    )
 
     @Before
     fun removeLeftoverKey() {
         // A crashed earlier run could leave a key behind; every test starts from "no key".
         manager.deleteMasterKey()
+        shortWindowManager.deleteMasterKey()
     }
 
     @After
     fun deleteTestKey() {
         // @After runs even when a test fails, so the test key never stays on the phone.
         manager.deleteMasterKey()
+        shortWindowManager.deleteMasterKey()
     }
 
     @Test
@@ -89,7 +98,7 @@ class MasterKeyManagerTest {
     }
 
     @Test
-    fun keyRequiresFingerprintOrPinWithThirtySecondWindow() {
+    fun keyRequiresFingerprintOrPinWithTheAppWindow() {
         val key = manager.getOrCreateMasterKey()
         val keyInfo = manager.readKeyInfo(key)
         val expectedAuthTypes = KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
@@ -102,8 +111,9 @@ class MasterKeyManagerTest {
     }
 
     /**
-     * Unlocking the phone with its PIN also opens the key's 30-second window, so whether the
-     * key is refused right now depends on when the phone was last unlocked.
+     * Uses a 30-second test key (same rules as the app's key, shorter window) so the wait stays short.
+     * Unlocking the phone with its PIN also opens the window, so whether the key is refused right
+     * now depends on when the phone was last unlocked.
      *
      * To make the result certain: if the first try is allowed, we are inside the window,
      * so we wait until the window has surely passed and try again. The second try must be refused.
@@ -115,15 +125,15 @@ class MasterKeyManagerTest {
     }
 
     private fun checkKeyIsRefusedAfterWindow() {
-        val key = manager.getOrCreateMasterKey()
+        val key = shortWindowManager.getOrCreateMasterKey()
 
         val refusedAtOnce = isRefusedForMissingAuth(key)
         if (refusedAtOnce) return
 
-        Thread.sleep(WAIT_PAST_WINDOW_MILLIS)
+        Thread.sleep(WAIT_PAST_TEST_WINDOW_MILLIS)
 
         val refusedAfterWaiting = isRefusedForMissingAuth(key)
-        assertTrue("Key was still usable after the 30-second window", refusedAfterWaiting)
+        assertTrue("Key was still usable after its window", refusedAfterWaiting)
     }
 
     /** Tries to start an encryption. True if Keystore refused because nobody authenticated recently. */
@@ -151,10 +161,8 @@ class MasterKeyManagerTest {
 
     private companion object {
         const val TEST_KEY_ALIAS = "hb_master_key_test"
+        const val SHORT_WINDOW_KEY_ALIAS = "hb_master_key_short_window_test"
         const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
-
-        /** The 30-second window plus 5 seconds of margin for clock and scheduling delays. */
-        const val WAIT_PAST_WINDOW_MILLIS = (VAULT_UNLOCK_WINDOW_SECONDS + 5) * 1000L
 
         /** Marker so the storage level is easy to find in the test output. */
         const val STORAGE_REPORT_PREFIX = "HB_KEY_STORAGE_LEVEL="

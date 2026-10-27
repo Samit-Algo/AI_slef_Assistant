@@ -98,7 +98,7 @@ class VaultRepository(
     /**
      * Saves a new document: encrypts the file, then adds its row.
      *
-     * Order: the wrapped key is made first (it needs the master key, so an expired 30-second
+     * Order: the wrapped key is made first (it needs the master key, so an expired fingerprint/PIN
      * window fails HERE, before anything is written; the caller asks again via MasterKeyAccess).
      * Then the .bin is written, then the row. If the row cannot be added, the .bin is deleted.
      * Why this order: a .bin without a row is harmless (unreadable, its key is stored nowhere),
@@ -146,7 +146,7 @@ class VaultRepository(
     /**
      * Decrypts a document for viewing, fully verified (rule 6, Task 1.5).
      *
-     * Needs the master key to unwrap the document's key, so after the 30-second window it throws
+     * Needs the master key to unwrap the document's key, so after the fingerprint/PIN window it throws
      * UserNotAuthenticatedException; call it through MasterKeyAccess, which asks once and retries.
      * Only the row is read under the database lock; the (slower) decryption runs outside it.
      *

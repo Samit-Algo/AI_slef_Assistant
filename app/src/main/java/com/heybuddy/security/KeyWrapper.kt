@@ -14,7 +14,7 @@ import com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters
  * Every wrap is bound to its owner with associated data: unwrapping with a different owner fails.
  *
  * Every call needs the master key, so it can throw UserNotAuthenticatedException once the
- * 30-second window has passed. Callers in the app go through [MasterKeyAccess], which asks again.
+ * fingerprint/PIN window has passed. Callers in the app go through [MasterKeyAccess], which asks again.
  *
  * About wiping key material: Tink keeps keys inside its own KeysetHandle objects, which cannot be
  * wiped from our code. We only hold them as long as needed and then drop the reference.

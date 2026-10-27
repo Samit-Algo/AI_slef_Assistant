@@ -13,7 +13,7 @@ import java.security.GeneralSecurityException
  * Logic tests for [KeyWrapper] (rules 3 and 4).
  *
  * Uses a test key WITHOUT the fingerprint/PIN requirement, so results never depend on the
- * 30-second window. The auth-required behaviour is tested in [AuthRequiredKeyWrapTest].
+ * fingerprint/PIN window. The auth-required behaviour is tested in [AuthRequiredKeyWrapTest].
  */
 @RunWith(AndroidJUnit4::class)
 class KeyWrapperTest {

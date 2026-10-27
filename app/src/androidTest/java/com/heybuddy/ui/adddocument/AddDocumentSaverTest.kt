@@ -11,6 +11,7 @@ import com.heybuddy.files.PickedFile
 import com.heybuddy.security.BiometricUnlocker
 import com.heybuddy.security.DatabaseKeyProvider
 import com.heybuddy.security.FileCrypto
+import com.heybuddy.security.TEST_AUTH_WINDOW_SECONDS
 import com.heybuddy.security.KeyCheckResult
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyAccess
@@ -46,7 +47,11 @@ class AddDocumentSaverTest {
     private val passphraseFile = File(context.noBackupFilesDir, "db_passphrase_saver_test.bin")
     private val passphraseKey = MasterKeyManager(keyAlias = "hb_master_key_saver_db_test", requireUserAuthentication = false)
     private val documentKeyNoAuth = MasterKeyManager(keyAlias = "hb_master_key_saver_doc_test", requireUserAuthentication = false)
-    private val documentKeyWithAuth = MasterKeyManager(keyAlias = "hb_master_key_saver_auth_test")
+    // 30-second test window (not the app's 5 minutes), so "window closed" is reached quickly.
+    private val documentKeyWithAuth = MasterKeyManager(
+        keyAlias = "hb_master_key_saver_auth_test",
+        authWindowSeconds = TEST_AUTH_WINDOW_SECONDS,
+    )
     private val lockState = VaultLockState()
     private val keyProvider = DatabaseKeyProvider(KeyWrapper(passphraseKey), passphraseFile)
     private val holder = VaultDatabaseHolder(context, lockState, keyProvider, TEST_DATABASE_NAME)
@@ -119,7 +124,7 @@ class AddDocumentSaverTest {
     /**
      * With an auth-required key and no recent fingerprint/PIN, the save needs "Confirm it's you".
      * The user cancels, so the calm message comes back and nothing is saved.
-     * Skipped (not failed) if the phone was unlocked in the last 30 seconds, because then the key works.
+     * Skipped (not failed) if the phone was unlocked within the key window, because then the key works.
      */
     @Test
     fun cancelledConfirmationGivesTheCalmMessageAndSavesNothing() = runBlocking {
@@ -161,7 +166,7 @@ class AddDocumentSaverTest {
     private fun requireAuthWindowClosed() {
         val unlocker = BiometricUnlocker(documentKeyWithAuth, VaultLockState())
         val windowClosed = unlocker.checkMasterKeyUsable() == KeyCheckResult.NOT_AUTHENTICATED
-        assumeTrue("Phone was unlocked less than 30 seconds ago; run again later", windowClosed)
+        assumeTrue("Phone was unlocked within the key window; run again later", windowClosed)
     }
 
     private fun deleteEverythingFromTests() {

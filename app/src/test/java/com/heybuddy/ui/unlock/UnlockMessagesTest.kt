@@ -13,7 +13,7 @@ class UnlockMessagesTest {
         assertEquals(R.string.unlock_error_cancelled, messageForFailure(UnlockFailure.CANCELLED))
         assertEquals(R.string.unlock_error_too_many_tries, messageForFailure(UnlockFailure.TOO_MANY_TRIES))
         assertEquals(R.string.unlock_error_fingerprint_locked, messageForFailure(UnlockFailure.FINGERPRINT_LOCKED_LONG))
-        assertEquals(R.string.unlock_error_key_not_usable, messageForFailure(UnlockFailure.KEY_NOT_USABLE))
+        assertEquals(R.string.unlock_error_key_gone, messageForFailure(UnlockFailure.KEY_GONE))
         assertEquals(R.string.unlock_error_other, messageForFailure(UnlockFailure.OTHER))
     }
 }

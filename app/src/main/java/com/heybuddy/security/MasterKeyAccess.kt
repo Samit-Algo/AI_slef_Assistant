@@ -51,7 +51,7 @@ sealed interface KeyAccessResult<out T> {
 }
 
 /**
- * Runs actions that need the master key, and handles the expired 30-second window calmly.
+ * Runs actions that need the master key, and handles the expired fingerprint/PIN window calmly.
  *
  * If the window has passed, it shows the fingerprint/PIN prompt again and retries the action
  * ONCE. It never crashes and never retries more than once.
@@ -159,7 +159,7 @@ class MasterKeyAccess(
 private const val MAX_CAUSE_DEPTH = 16
 
 /**
- * Tells whether an error means "no fingerprint/PIN in the last 30 seconds".
+ * Tells whether an error means "no fingerprint/PIN within the key window".
  *
  * Checks the whole cause chain, because libraries such as Tink may wrap the Keystore's
  * UserNotAuthenticatedException inside their own GeneralSecurityException.

@@ -10,10 +10,17 @@ import com.heybuddy.util.MASTER_KEY_ALIAS
 import com.heybuddy.util.MASTER_KEY_SIZE_BITS
 import com.heybuddy.util.SafeLog
 import com.heybuddy.util.VAULT_UNLOCK_WINDOW_SECONDS
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
+
+/**
+ * The master key is missing although the vault exists (rule 14). This is CERTAIN evidence that
+ * the vault can never be opened again (Android deletes the key when the screen lock is removed).
+ */
+class MasterKeyGoneException : GeneralSecurityException("The vault's master key no longer exists")
 
 /** Where a Keystore key physically lives. Used by tests and the Phase 1 report. */
 enum class KeyStorageLevel {
@@ -37,18 +44,25 @@ enum class KeyStorageLevel {
  * encrypt/decrypt happens inside secure hardware.
  *
  * Important: the master key being usable does NOT mean the vault is unlocked.
- * Simply unlocking the phone with its PIN also opens the key's 30-second window,
+ * Simply unlocking the phone with its PIN also opens the key's fingerprint/PIN window,
  * so the app's own lock state (Task 1.3) is what decides whether the vault is open.
  *
  * @param keyAlias Name of the key in Keystore. The app uses [MASTER_KEY_ALIAS]; tests pass
  *   a different name so they can never delete the real vault key.
  * @param requireUserAuthentication ONLY TESTS may set this to false. It lets logic tests use a
- *   key that does not depend on the 30-second fingerprint/PIN window. The app always uses true.
+ *   key that does not depend on the fingerprint/PIN window. The app always uses true.
+ * @param authWindowSeconds How long the key stays usable after a fingerprint/PIN. ONLY TESTS may
+ *   change it (a short window keeps expiry tests quick). The app always uses [VAULT_UNLOCK_WINDOW_SECONDS].
+ * @param mayCreateKey Asked before creating a NEW key. The app answers false while vault data
+ *   exists: if the key is missing then, Android removed it (rule 14), and a new key could never
+ *   open the old vault; it would only hide the problem.
  */
 class MasterKeyManager(
     /** Name of the key in Keystore. */
     val keyAlias: String = MASTER_KEY_ALIAS,
     private val requireUserAuthentication: Boolean = true,
+    private val mayCreateKey: () -> Boolean = { true },
+    private val authWindowSeconds: Int = VAULT_UNLOCK_WINDOW_SECONDS,
 ) {
 
     // Stops two callers from both seeing "no key" and creating two different keys.
@@ -65,6 +79,7 @@ class MasterKeyManager(
         synchronized(creationLock) {
             val existingKey = findExistingKey()
             if (existingKey != null) return existingKey
+            if (!mayCreateKey()) throw MasterKeyGoneException()
             return createKey()
         }
     }
@@ -149,14 +164,14 @@ class MasterKeyManager(
             // Keystore picks a fresh random IV for every encryption. Our code must never
             // supply its own IV: reusing one with GCM would break the encryption.
             .setRandomizedEncryptionRequired(true)
-            // The key cannot be used while the phone is locked, even inside the 30-second window.
+            // The key cannot be used while the phone is locked, even inside the fingerprint/PIN window.
             .setUnlockedDeviceRequired(true)
             .setIsStrongBoxBacked(useStrongBox)
 
         if (requireUserAuthentication) {
             builder
                 .setUserAuthenticationRequired(true)
-                .setUserAuthenticationParameters(VAULT_UNLOCK_WINDOW_SECONDS, allowedAuthTypes)
+                .setUserAuthenticationParameters(authWindowSeconds, allowedAuthTypes)
                 // PIN unlock is allowed too, so wiping the key when a new fingerprint is added
                 // gives little extra security but would destroy the whole vault (there is no backup).
                 // Removing the screen lock still invalidates the key; Task 1.9 handles that (rule 14).

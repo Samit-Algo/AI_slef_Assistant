@@ -57,6 +57,7 @@ fun UnlockScreen(uiState: UnlockUiState, unlockSucceeded: Boolean, onUnlockClick
             onClick = onUnlockClick,
             enabled = !unlockSucceeded,
             icon = R.drawable.ic_fingerprint,
+            sensitive = true,
         )
         if (uiState.showNoFingerprintNote) {
             MessageBanner(text = stringResource(R.string.unlock_note_no_fingerprint), kind = BannerKind.INFO)

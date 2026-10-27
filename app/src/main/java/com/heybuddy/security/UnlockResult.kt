@@ -13,10 +13,16 @@ enum class UnlockFailure {
     /** Too many wrong fingerprints over time; fingerprint stays off until the phone is unlocked with PIN. */
     FINGERPRINT_LOCKED_LONG,
 
-    /** The prompt said yes, but the master key still could not be used, or could not be created. */
-    KEY_NOT_USABLE,
+    /**
+     * CERTAIN: the master key is gone for good (rule 14), so the recovery screen is shown.
+     * Only set on proof (see isProofKeyIsGone), never on a guess.
+     */
+    KEY_GONE,
 
-    /** Anything else: hardware busy, timeout, unknown error. */
+    /**
+     * Anything else: Keystore busy, phone locked, timeout, an unknown error, or the key not usable
+     * right now. Shows the normal "Unlock didn't work. Please try again." and NEVER offers deletion.
+     */
     OTHER,
 }
 

@@ -39,7 +39,7 @@ class DatabaseKeyProvider(
      * Returns the database passphrase, creating and saving it the first time.
      *
      * Needs the master key, so it can throw UserNotAuthenticatedException after the
-     * 30-second window; call it through [MasterKeyAccess].
+     * fingerprint/PIN window; call it through [MasterKeyAccess].
      *
      * @return A NEW COPY of the passphrase. The caller must wipe it (fill with zeros) when done.
      *   Wiping the copy never affects the copy kept here.

@@ -71,6 +71,8 @@ private val PreviewMaxHeight = 320.dp
  * @param onNameChanged Called on every change to the name field.
  * @param onSaveClick Called when the user taps Save.
  * @param onClose Called on back, Cancel and Done.
+ * @param onBeforeExternalScreen Called right before a picker opens, so auto-lock knows the app
+ *   is not really being left (one-time 2-minute pass, rule 9).
  */
 @Composable
 fun AddDocumentScreen(
@@ -80,12 +82,19 @@ fun AddDocumentScreen(
     onNameChanged: (String) -> Unit,
     onSaveClick: () -> Unit,
     onClose: () -> Unit,
+    onBeforeExternalScreen: () -> Unit = {},
 ) {
     // Both pickers grant one-time access only; nothing here asks to keep it.
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), onFilePicked)
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), onFilePicked)
-    val pickPhoto = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-    val pickFile = { filePicker.launch(ACCEPTED_MIME_TYPES) }
+    val pickPhoto = {
+        onBeforeExternalScreen()
+        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    val pickFile = {
+        onBeforeExternalScreen()
+        filePicker.launch(ACCEPTED_MIME_TYPES)
+    }
 
     ScreenScaffold(topBar = { AddDocumentTopBar(onBack = onClose) }) {
         when (uiState.stage) {
@@ -145,6 +154,7 @@ private fun ColumnScope.ReadySection(
         onClick = onSaveClick,
         enabled = uiState.canSave,
         icon = R.drawable.ic_lock,
+        sensitive = true,
     )
     SecondaryButton(text = stringResource(R.string.add_choose_other_file), onClick = onPickOtherFile)
     QuietButton(text = stringResource(R.string.add_cancel), onClick = onClose, modifier = Modifier.align(Alignment.CenterHorizontally))

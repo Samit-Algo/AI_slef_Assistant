@@ -175,6 +175,9 @@ class DesignScreenshots {
     private fun capture(folder: File, fileName: String, dark: Boolean, screen: @Composable () -> Unit) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                // TEST WINDOW ONLY: the app sets FLAG_SECURE (rule 8), which would make every design
+                // screenshot black. The real app is never affected by this line.
+                activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
                 activity.setContent { HeyBuddyTheme(darkTheme = dark) { screen() } }
                 // Match the system bar icons to the forced theme, as the real app does for the phone's theme.
                 val barController = WindowCompat.getInsetsController(activity.window, activity.window.decorView)

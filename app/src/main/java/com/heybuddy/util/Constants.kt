@@ -3,15 +3,21 @@ package com.heybuddy.util
 /**
  * How long (in seconds) the Keystore master key stays usable after one fingerprint/PIN check.
  *
- * Short on purpose: if the phone is grabbed after unlock, the key soon stops working
- * even if the app's own lock has not kicked in yet.
+ * 5 minutes (owner decision, Task 1.9): with 30 seconds, "Confirm it's you" appeared on almost
+ * every document opened, which was too often for real use.
  *
- * After this window has passed, any use of the master key (for example, adding a document
- * 5 minutes after unlock) throws UserNotAuthenticatedException. Every such use must go through
- * MasterKeyAccess, which calmly shows the fingerprint/PIN prompt again and retries once.
- * It must never crash or show an error message.
+ * Why this is still safe: the app's OWN lock is the main protection. It locks at once when the
+ * app leaves the screen or the screen turns off, and after IDLE_LOCK_SECONDS without a touch, and
+ * a locked vault never uses the key. This key window is a second layer underneath: it only matters
+ * if the app lock were somehow bypassed, and then it still limits the key to 5 minutes.
+ *
+ * The window is fixed when the key is CREATED. A key made with an older value keeps that value
+ * until the vault is deleted and set up again.
+ *
+ * After this window has passed, any use of the master key throws UserNotAuthenticatedException.
+ * Every such use goes through MasterKeyAccess, which calmly asks "Confirm it's you" and retries once.
  */
-const val VAULT_UNLOCK_WINDOW_SECONDS: Int = 30
+const val VAULT_UNLOCK_WINDOW_SECONDS: Int = 300
 
 /** Length of the database passphrase in bytes (rule 5). 32 bytes = 256 bits of randomness. */
 const val DB_PASSPHRASE_BYTES: Int = 32
@@ -36,6 +42,13 @@ const val MASTER_KEY_ALIAS: String = "hb_master_key"
 
 /** Master key size. AES-256 is the strongest AES size Keystore supports (rule 2). */
 const val MASTER_KEY_SIZE_BITS: Int = 256
+
+/**
+ * Longest time (in seconds) a one-time pass keeps the vault open while our own system screen
+ * (file picker, photo picker, fingerprint/PIN prompt) is in front (rule 9, owner decision).
+ * Without a limit, wandering off from a picker would keep the vault open forever.
+ */
+const val EXTERNAL_SCREEN_PASS_SECONDS: Int = 120
 
 /** How long (in seconds) the app may sit with no touches before it locks itself (rule 9). */
 const val IDLE_LOCK_SECONDS: Int = 120

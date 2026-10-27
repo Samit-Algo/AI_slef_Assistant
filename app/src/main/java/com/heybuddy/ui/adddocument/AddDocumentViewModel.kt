@@ -81,7 +81,7 @@ class AddDocumentViewModel(
     private val appContext: Context,
     private val saver: AddDocumentSaver,
     private val unlocker: BiometricUnlocker,
-    lockState: VaultLockState,
+    private val lockState: VaultLockState,
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(AddDocumentUiState())
@@ -108,6 +108,9 @@ class AddDocumentViewModel(
      */
     fun onFilePicked(uri: Uri?) {
         if (uri == null) return
+        // A picker can return after the vault locked (for example the screen turned off while it
+        // was open). The file must then not be read at all.
+        if (lockState.status.value == LockStatus.LOCKED) return
         discardPickedFile()
         mutableUiState.value = AddDocumentUiState(stage = AddStage.READING)
         viewModelScope.launch {

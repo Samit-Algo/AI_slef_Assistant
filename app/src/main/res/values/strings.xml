@@ -17,10 +17,22 @@
     <string name="unlock_error_cancelled">Unlock cancelled. Tap Unlock to try again.</string>
     <string name="unlock_error_too_many_tries">Too many fingerprint tries. Tap Unlock and use your PIN, pattern or password instead.</string>
     <string name="unlock_error_fingerprint_locked">Fingerprint is locked. Unlock your phone with your PIN first, then try again.</string>
-    <string name="unlock_error_key_not_usable">Hey Buddy couldn\'t open its secure key. Please try unlocking again.</string>
+    <string name="unlock_error_key_gone">Your vault can\'t be opened any more.</string>
     <string name="unlock_error_other">Unlock didn\'t work. Please try again.</string>
 
-    <!-- Re-ask when the 30-second key window has expired (MasterKeyAccess) -->
+    <!-- Recovery screen (rule 14): shown ONLY when the key is certainly gone -->
+    <string name="recovery_title">Your vault can\'t be opened any more</string>
+    <string name="recovery_body">Android removed Hey Buddy\'s secure key, usually because the phone\'s screen lock was turned off.\n\nFor your safety, the documents in the vault can\'t be recovered, not even by us. You can delete the old vault and start again.</string>
+    <string name="recovery_delete_button">Delete everything and start again</string>
+    <string name="recovery_confirm_title">Delete all documents?</string>
+    <string name="recovery_confirm_body">This deletes ALL documents in your vault, for good. They can\'t be brought back.\n\nYour original files in the gallery or downloads are not touched.</string>
+    <string name="recovery_confirm_delete">Delete everything</string>
+    <string name="recovery_deleting">Deleting the old vault…</string>
+
+    <!-- Tapjacking protection -->
+    <string name="touch_blocked_overlay">Another app is drawing over Hey Buddy (for example a screen filter, blue-light app or chat bubble). Turn it off and try again.</string>
+
+    <!-- Re-ask when the fingerprint/PIN key window has expired (MasterKeyAccess) -->
     <string name="reauth_prompt_title">Confirm it\'s you</string>
     <string name="reauth_prompt_subtitle">Use your fingerprint or PIN to continue</string>
     <string name="key_access_confirm_again">Please confirm it\'s you to continue. Tap to try again.</string>

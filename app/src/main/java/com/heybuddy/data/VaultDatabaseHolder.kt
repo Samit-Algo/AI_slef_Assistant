@@ -104,7 +104,7 @@ class VaultDatabaseHolder(
     }
 
     private fun onVaultUnlocked() {
-        // Read the passphrase now, while the 30-second key window is surely open, so opening
+        // Read the passphrase now, while the fingerprint/PIN key window is surely open, so opening
         // the database later never needs the master key (and never asks for fingerprint/PIN).
         backgroundScope.launch {
             mutex.withLock {

@@ -16,7 +16,7 @@ fun messageForFailure(failure: UnlockFailure): Int {
         UnlockFailure.CANCELLED -> R.string.unlock_error_cancelled
         UnlockFailure.TOO_MANY_TRIES -> R.string.unlock_error_too_many_tries
         UnlockFailure.FINGERPRINT_LOCKED_LONG -> R.string.unlock_error_fingerprint_locked
-        UnlockFailure.KEY_NOT_USABLE -> R.string.unlock_error_key_not_usable
+        UnlockFailure.KEY_GONE -> R.string.unlock_error_key_gone
         UnlockFailure.OTHER -> R.string.unlock_error_other
     }
 }

@@ -42,6 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.heybuddy.R
 import com.heybuddy.ui.components.BannerKind
 import com.heybuddy.ui.components.LoadingState
+import com.heybuddy.ui.components.LocalObscuredTouchReporter
+import com.heybuddy.ui.components.rejectObscuredTouches
 import com.heybuddy.ui.components.MessageBanner
 import com.heybuddy.ui.components.PrimaryButton
 import com.heybuddy.ui.components.SecondaryButton
@@ -226,7 +228,12 @@ private fun RenameDialog(dialog: RenameDialogState, actions: ViewerActions) {
             )
         },
         confirmButton = {
-            TextButton(onClick = actions.onRenameConfirm, enabled = dialog.canSave) {
+            val reportBlockedTouch = LocalObscuredTouchReporter.current
+            TextButton(
+                onClick = actions.onRenameConfirm,
+                enabled = dialog.canSave,
+                modifier = Modifier.rejectObscuredTouches(reportBlockedTouch),
+            ) {
                 Text(text = stringResource(R.string.rename_save))
             }
         },

@@ -8,6 +8,16 @@ import com.heybuddy.MainActivity
 import org.junit.Assert.assertFalse
 
 /**
+ * Fingerprint/PIN window for auth-required TEST keys only. The app's key uses
+ * VAULT_UNLOCK_WINDOW_SECONDS (5 minutes); expiry tests use 30 seconds so they finish quickly,
+ * and "unlock the phone, then start the test within 10 seconds" still leaves room.
+ */
+internal const val TEST_AUTH_WINDOW_SECONDS: Int = 30
+
+/** The test window plus 5 seconds of margin for clock and scheduling delays. */
+internal const val WAIT_PAST_TEST_WINDOW_MILLIS: Long = (TEST_AUTH_WINDOW_SECONDS + 5) * 1000L
+
+/**
  * Fails with a plain instruction if the phone is locked.
  *
  * All vault keys use setUnlockedDeviceRequired(true), so on a locked phone every key test would
@@ -29,7 +39,7 @@ internal fun requirePhoneUnlocked() {
  * "device locked" instead of "window expired", which proves nothing.
  *
  * DO NOT TAP THE SCREEN while this runs: the app shows its Unlock button, and a real unlock
- * opens a fresh 30-second window and spoils the test. (A blank test-only screen is not possible:
+ * opens a fresh fingerprint/PIN window and spoils the test. (A blank test-only screen is not possible:
  * the test runner can only open screens that belong to the app itself.)
  */
 internal fun withScreenKeptOn(block: () -> Unit) {

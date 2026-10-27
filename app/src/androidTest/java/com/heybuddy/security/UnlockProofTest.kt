@@ -1,7 +1,6 @@
 package com.heybuddy.security
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.heybuddy.util.VAULT_UNLOCK_WINDOW_SECONDS
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -9,15 +8,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Checks the unlock proof step on a real phone: once the 30-second window has passed,
+ * Checks the unlock proof step on a real phone: once the key's window has passed,
  * the proof must say NOT_AUTHENTICATED, so a fake "success" callback alone can never open the vault.
  *
- * Uses its own key name, so the real vault key is never touched.
+ * Uses its own key name (with a 30-second test window instead of the app's 5 minutes), so the
+ * real vault key is never touched and the wait stays short.
  */
 @RunWith(AndroidJUnit4::class)
 class UnlockProofTest {
 
-    private val masterKeyManager = MasterKeyManager(keyAlias = TEST_KEY_ALIAS)
+    private val masterKeyManager = MasterKeyManager(
+        keyAlias = TEST_KEY_ALIAS,
+        authWindowSeconds = TEST_AUTH_WINDOW_SECONDS,
+    )
     private val unlocker = BiometricUnlocker(masterKeyManager, VaultLockState())
 
     @Before
@@ -45,7 +48,7 @@ class UnlockProofTest {
         println("$REPORT_PREFIX first=$firstCheck")
         if (firstCheck == KeyCheckResult.NOT_AUTHENTICATED) return
 
-        Thread.sleep(WAIT_PAST_WINDOW_MILLIS)
+        Thread.sleep(WAIT_PAST_TEST_WINDOW_MILLIS)
 
         val secondCheck = unlocker.checkMasterKeyUsable()
         println("$REPORT_PREFIX second=$secondCheck")
@@ -54,9 +57,6 @@ class UnlockProofTest {
 
     private companion object {
         const val TEST_KEY_ALIAS = "hb_master_key_unlock_test"
-
-        /** The 30-second window plus 5 seconds of margin. */
-        const val WAIT_PAST_WINDOW_MILLIS = (VAULT_UNLOCK_WINDOW_SECONDS + 5) * 1000L
 
         /** Marker so the results are easy to find in logcat. */
         const val REPORT_PREFIX = "HB_UNLOCK_PROOF"

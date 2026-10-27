@@ -39,7 +39,7 @@ class VaultLockState {
     }
 
     /**
-     * Registers something to run right after every unlock, while the 30-second key window is open.
+     * Registers something to run right after every unlock, while the fingerprint/PIN key window is open.
      *
      * @param listener Called on the thread that calls [markUnlocked]. Must not block.
      */

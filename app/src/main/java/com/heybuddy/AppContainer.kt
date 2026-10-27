@@ -3,6 +3,8 @@ package com.heybuddy
 import android.content.Context
 import android.os.storage.StorageManager
 import com.heybuddy.data.VaultDatabaseHolder
+import com.heybuddy.data.VaultEraser
+import com.heybuddy.data.VaultFiles
 import com.heybuddy.data.VaultRepository
 import com.heybuddy.files.TempFileCleaner
 import com.heybuddy.security.BiometricUnlocker
@@ -10,7 +12,9 @@ import com.heybuddy.security.DatabaseKeyProvider
 import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
+import com.heybuddy.security.VaultHealthMonitor
 import com.heybuddy.security.VaultLockState
+import com.heybuddy.ui.AutoLockController
 import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
@@ -27,35 +31,54 @@ import java.io.IOException
  */
 class AppContainer(private val appContext: Context) {
 
-    /** The one manager for the vault's Keystore master key. */
-    val masterKeyManager: MasterKeyManager = MasterKeyManager()
+    /**
+     * Where the vault's data lives: app-private only (spec 5.4). The passphrase and view_tmp are in
+     * noBackupFilesDir, so they can never reach a backup (rules 6 and 7).
+     */
+    val vaultFiles: VaultFiles = VaultFiles(
+        databaseFile = appContext.getDatabasePath(VAULT_DATABASE_NAME),
+        passphraseFile = File(appContext.noBackupFilesDir, DB_PASSPHRASE_FILE_NAME),
+        vaultDir = File(appContext.filesDir, VAULT_FOLDER_NAME),
+        viewTempDir = File(appContext.noBackupFilesDir, VIEW_TEMP_FOLDER_NAME),
+    )
+
+    /**
+     * The Keystore master key. A NEW key may only be created while no vault exists: if the key is
+     * missing while vault data exists, Android removed it (rule 14), and a new key would hide that.
+     */
+    val masterKeyManager: MasterKeyManager = MasterKeyManager(mayCreateKey = { !vaultFiles.vaultDataExists() })
+
+    /** Whether the vault can still be opened; decides "key gone" only on certain proof (rule 14). */
+    val vaultHealthMonitor: VaultHealthMonitor = VaultHealthMonitor(
+        keyExists = masterKeyManager::hasMasterKey,
+        vaultDataExists = vaultFiles::vaultDataExists,
+    )
 
     /** The app's own lock. Starts locked every time the process starts. */
     val vaultLockState: VaultLockState = VaultLockState()
 
+    /** Locks automatically: on leaving the app, screen off, idle, and when a picker pass runs out (rule 9). */
+    val autoLock: AutoLockController = AutoLockController(vaultLockState)
+
     /** Shows the fingerprint/PIN prompt and opens [vaultLockState] after a proven unlock. */
-    val biometricUnlocker: BiometricUnlocker = BiometricUnlocker(masterKeyManager, vaultLockState)
+    val biometricUnlocker: BiometricUnlocker = BiometricUnlocker(
+        masterKeyManager = masterKeyManager,
+        vaultLockState = vaultLockState,
+        healthMonitor = vaultHealthMonitor,
+        onBeforeSystemScreen = autoLock::issueExternalScreenPass,
+    )
 
     /** Wraps and unwraps document keys and the database passphrase with the master key. */
     val keyWrapper: KeyWrapper = KeyWrapper(masterKeyManager)
 
-    // noBackupFilesDir: app-private and never included in backups (rule 7).
-    private val passphraseFile: File = File(appContext.noBackupFilesDir, DB_PASSPHRASE_FILE_NAME)
-
     /** The SQLCipher passphrase. [databaseHolder] wipes its in-memory copy on every lock. */
-    val databaseKeyProvider: DatabaseKeyProvider = DatabaseKeyProvider(keyWrapper, passphraseFile)
-
-    // filesDir: app-private storage only, never external storage (spec 5.4).
-    private val vaultDir: File = File(appContext.filesDir, VAULT_FOLDER_NAME)
-
-    // noBackupFilesDir: decrypted files for viewing must never reach a backup (rules 6 and 7).
-    private val viewTempDir: File = File(appContext.noBackupFilesDir, VIEW_TEMP_FOLDER_NAME)
+    val databaseKeyProvider: DatabaseKeyProvider = DatabaseKeyProvider(keyWrapper, vaultFiles.passphraseFile)
 
     /** Encrypts documents into the vault and decrypts them only after full verification. */
-    val fileCrypto: FileCrypto = FileCrypto(vaultDir, viewTempDir)
+    val fileCrypto: FileCrypto = FileCrypto(vaultFiles.vaultDir, vaultFiles.viewTempDir)
 
     /** Deletes half-finished encryptions and leftover decrypted files. */
-    val tempFileCleaner: TempFileCleaner = TempFileCleaner(vaultDir, viewTempDir)
+    val tempFileCleaner: TempFileCleaner = TempFileCleaner(vaultFiles.vaultDir, vaultFiles.viewTempDir)
 
     /**
      * Opens the SQLCipher database while unlocked. On lock it closes the database, then wipes
@@ -68,7 +91,11 @@ class AppContainer(private val appContext: Context) {
     val vaultRepository: VaultRepository =
         VaultRepository(databaseHolder, vaultLockState, keyWrapper, fileCrypto)
 
-    /** Which vault screen is showing; back to home on every lock and unlock (memory only). */
+    /** Deletes the whole vault for good (recovery screen now, Settings in Task 1.10). */
+    val vaultEraser: VaultEraser =
+        VaultEraser(appContext, vaultLockState, databaseHolder, masterKeyManager, vaultHealthMonitor, vaultFiles)
+
+    /** Which vault screen is showing; back to the list on every lock and unlock (memory only). */
     val vaultNavigator: VaultNavigator = VaultNavigator(vaultLockState)
 
     /** Saves picked files into the vault. */

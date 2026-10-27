@@ -33,6 +33,13 @@ enum class LogEvent(val message: String) {
     DOCUMENT_SAVE_ROLLED_BACK("Document save failed; its encrypted file was removed"),
     DOCUMENT_RENAMED("Document renamed"),
     DOCUMENT_DELETED("Document deleted"),
+    MASTER_KEY_GONE("Master key is gone for good; showing the recovery screen"),
+    AUTO_LOCK_BACKGROUND("Vault locked: app left the screen"),
+    AUTO_LOCK_PASS_EXPIRED("Vault locked: away from the app longer than the 2-minute pass"),
+    AUTO_LOCK_SCREEN_OFF("Vault locked: screen turned off"),
+    AUTO_LOCK_IDLE("Vault locked: no touch for the idle time"),
+    VAULT_ERASED("Vault erased: key, database and files deleted"),
+    TOUCH_BLOCKED_OVERLAY("Tap ignored: another app is drawing over Hey Buddy"),
 }
 
 /**

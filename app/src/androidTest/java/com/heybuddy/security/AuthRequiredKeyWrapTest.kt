@@ -1,7 +1,6 @@
 package com.heybuddy.security
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.heybuddy.util.VAULT_UNLOCK_WINDOW_SECONDS
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
@@ -14,7 +13,8 @@ import org.junit.runners.MethodSorters
 import java.security.GeneralSecurityException
 
 /**
- * Timing tests with an auth-required test key (same rules as hb_master_key).
+ * Timing tests with an auth-required test key (same rules as hb_master_key, but a 30-second
+ * window instead of 5 minutes so the wait stays short).
  *
  * HOW TO RUN: unlock the phone with PIN, then start this class within about 10 seconds.
  * Do not touch or lock the phone; the second test waits about 35 seconds.
@@ -24,7 +24,10 @@ import java.security.GeneralSecurityException
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class AuthRequiredKeyWrapTest {
 
-    private val masterKeyManager = MasterKeyManager(keyAlias = TEST_KEY_ALIAS)
+    private val masterKeyManager = MasterKeyManager(
+        keyAlias = TEST_KEY_ALIAS,
+        authWindowSeconds = TEST_AUTH_WINDOW_SECONDS,
+    )
     private val keyWrapper = KeyWrapper(masterKeyManager)
 
     @Before
@@ -59,11 +62,11 @@ class AuthRequiredKeyWrapTest {
         val documentKey = keyWrapper.generateDocumentKey()
         val wrappedKey = wrapOrExplain(documentKey)
 
-        Thread.sleep(WAIT_PAST_WINDOW_MILLIS)
+        Thread.sleep(WAIT_PAST_TEST_WINDOW_MILLIS)
 
         try {
             keyWrapper.unwrapDocumentKey(wrappedKey, DOCUMENT_ID)
-            fail("Unwrap still worked after the 30-second window")
+            fail("Unwrap still worked after the key's window")
         } catch (refused: GeneralSecurityException) {
             assertTrue("Refused for another reason: $refused", isMissingUserAuthentication(refused))
         }
@@ -84,8 +87,5 @@ class AuthRequiredKeyWrapTest {
     private companion object {
         const val TEST_KEY_ALIAS = "hb_master_key_wrap_auth_test"
         const val DOCUMENT_ID = "33333333-3333-3333-3333-333333333333"
-
-        /** The 30-second window plus 5 seconds of margin. */
-        const val WAIT_PAST_WINDOW_MILLIS = (VAULT_UNLOCK_WINDOW_SECONDS + 5) * 1000L
     }
 }

@@ -127,6 +127,10 @@ A **locker inside a locker**:
    - Try StrongBox first (`setIsStrongBoxBacked(true)`); if not available, fall back to the normal hardware Keystore.
    - `setUserAuthenticationRequired(true)`
    - `setUserAuthenticationParameters(VAULT_UNLOCK_WINDOW_SECONDS, AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL)`
+   - `VAULT_UNLOCK_WINDOW_SECONDS` = **300 (5 minutes)** — owner decision in Task 1.9, after 30 seconds
+     made "Confirm it's you" appear on almost every document opened. The app's own lock (rule 9:
+     background, screen off, idle) is the **main** protection; this key window is a **second layer**
+     that limits the key even if the app lock were bypassed. The window is fixed when a key is created.
    - Key can never leave the Keystore.
 3. **One key per document.** Each document gets its own random Tink keyset (streaming AEAD,
    `AES256_GCM_HKDF_4KB`), wrapped (encrypted) with the master key and stored in `wrappedKey`.
@@ -142,8 +146,12 @@ A **locker inside a locker**:
    `fullBackupContent` that exclude everything (cloud backup and device-to-device transfer).
 8. **No screenshots.** Set `FLAG_SECURE` on the main activity so screenshots and screen
    recording show a black screen, and the recent-apps preview is hidden.
-9. **Auto-lock.** Lock when the app goes to the background (`ProcessLifecycleOwner` `ON_STOP`)
-   and after `IDLE_LOCK_SECONDS` of no touches. Locking clears decrypted data from memory.
+9. **Auto-lock.** Lock as soon as the app's screen stops being visible (the activity's `onStop`,
+   ignoring screen rotation; owner decision in Task 1.9 — immediate, unlike `ProcessLifecycleOwner`,
+   which waits about 0.7 s), when the screen turns off, and after `IDLE_LOCK_SECONDS` of no touches
+   or typing. Exception: right before our own code opens a file picker, photo picker or
+   fingerprint/PIN prompt, it issues a one-time pass, valid for at most 2 minutes; the screen
+   turning off always locks. Locking clears decrypted data from memory.
 10. **Phone must have a screen lock.** If `KeyguardManager.isDeviceSecure` is false, show a
     screen explaining why and block the vault until the user sets a lock.
 11. **Validate files.** Max 20 MB. Check the real type from the first bytes ("magic bytes"):
@@ -262,21 +270,21 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | --- | --- | --- | --- |
 | Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | In Task 1.11, on the Android emulator with a virtual fingerprint: unlock with fingerprint and confirm "Vault unlocked" in logcat |
 | Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | In Task 1.11, on the emulator: use a wrong virtual finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
-| Tink unwrap after the 30-second window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
+| Tink unwrap after the key window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error. The test uses a 30-second test key (the app key is 5 minutes) | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
 | **HIGHEST PRIORITY** — `fake_pdf.pdf` (text renamed to .pdf) is rejected: NOT TESTED YET on the phone | 1.7 | Owner approved Task 1.7 after testing one image and one PDF. Covered by automated tests (`FileTypeDetectorTest`), not yet by hand | In Task 1.11, with the files in `Download/HeyBuddyTest/`: pick it; expect "Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files…" and the document count unchanged |
 | **HIGHEST PRIORITY** — `broken_photo.jpg` (right first bytes, damaged after) is rejected: NOT TESTED YET | 1.7 | Same as above. No automated test decodes a real damaged image | In Task 1.11: pick it; expect "This image seems to be damaged…" and the count unchanged |
 | **HIGHEST PRIORITY** — `too_large.jpg` (21,000,000 bytes) is rejected: NOT TESTED YET on the phone | 1.7 | Same as above. Size limit covered by automated tests (`PickedFileReaderTest`, `FileCryptoTest`), not yet through the picker | In Task 1.11: pick it; expect "This file is larger than 20 MB…" and the count unchanged |
 | `sample_photo.png` and `sample_photo.webp` save correctly: NOT TESTED YET | 1.7 | Owner tested one image (JPEG) and one PDF only | In Task 1.11: add both; each shows a preview, saves, and the count goes up by 1 |
-| Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, wait 40 seconds, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
+| Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, keep using the app (touch the screen at least once a minute so the idle lock does not trigger) for more than 5 minutes, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
 | Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | In Task 1.11: clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
 | Check C: "Choose a photo" opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose a photo"; the photo picker opens with no permission question |
 | Keyboard does not cover the Name field or the Save button (Add screen): NOT TESTED YET | 1.8a | Owner skipped this check; the screenshot test cannot open the keyboard | In Task 1.11: on the Add screen with a picked file, tap Name; the field and "Save to vault" must stay visible (or reachable by scrolling) above the keyboard |
 | Home-screen app icon looks right: NOT TESTED YET | 1.8a | Owner skipped this check. App info showed the themed (one-colour) icon correctly | In Task 1.11: check the icon on the home screen, with themed icons both on and off if the phone allows |
 | Back on each screen (viewer → list, Add → list, Rename dialog → closes only the dialog, list → leaves the app): NOT TESTED YET by hand | 1.8b | Owner confirmed list, open, rename and zoom, but not Back. Covered by automated tests (`VaultNavigatorTest`, `ViewerViewModelTest`) | In Task 1.11: try Back on each screen and with the Rename dialog open |
 | Locking while a document is open: NOT TESTED YET by hand | 1.8b | Not explicitly confirmed. Covered by `ViewerViewModelTest` (view_tmp empty, picture freed, back at the list) | In Task 1.11 (after auto-lock exists): open a PDF, let the vault lock, unlock; expect the list, and `view_tmp` empty |
-| Cancelling "Confirm it's you" when opening a document: NOT TESTED YET | 1.8b | Not explicitly confirmed; no automated test (needs a real auth-required key) | In Task 1.11: wait 40 s after unlock, open a document, cancel the prompt; expect the calm message and "Try again" |
+| Cancelling "Confirm it's you" when opening a document: NOT TESTED YET | 1.8b | Not explicitly confirmed; no automated test (needs a real auth-required key) | In Task 1.11: keep using the app for more than 5 minutes after unlock (touching at least once a minute), open a document, cancel the prompt; expect the calm message and "Try again" |
 | Keyboard in the Rename dialog does not hide the name field or Save: NOT TESTED YET | 1.8b | Not explicitly confirmed | In Task 1.11: open Rename, tap the field; the field and Save must stay visible above the keyboard |
-| Decision pending: how often "Confirm it's you" appears when opening documents one after another | 1.8b | Owner planned to count it during the 1.8b test; no count reported yet. The 30-second window is unchanged | Owner reports the count; then decide whether to change `VAULT_UNLOCK_WINDOW_SECONDS` |
+| "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
 | Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | In Task 1.11: switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
 
 ### 5.14 UI design system — APPROVED by owner (2026-10-27)

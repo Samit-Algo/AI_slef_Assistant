@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,6 +33,9 @@ private val ButtonIconSize = 20.dp
  * @param modifier Layout changes from the caller.
  * @param enabled False to grey it out.
  * @param icon Optional decorative icon before the label (TalkBack reads the label only).
+ * @param sensitive True for actions that must not be tricked by another app's overlay
+ *   (Unlock, Save, Delete): taps are ignored while an overlay covers Hey Buddy.
+ * @param colors Normally the brand colour; the error colour for destructive actions.
  */
 @Composable
 fun PrimaryButton(
@@ -39,12 +44,20 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     @DrawableRes icon: Int? = null,
+    sensitive: Boolean = false,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
 ) {
+    val reportBlockedTouch = LocalObscuredTouchReporter.current
+    val touchGuard = if (sensitive) Modifier.rejectObscuredTouches(reportBlockedTouch) else Modifier
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = MaterialTheme.shapes.large,
-        modifier = modifier.fillMaxWidth().heightIn(min = Dimens.ButtonHeight),
+        colors = colors,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = Dimens.ButtonHeight)
+            .then(touchGuard),
     ) {
         ButtonContent(text = text, icon = icon)
     }
