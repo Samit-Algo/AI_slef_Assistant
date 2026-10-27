@@ -1,12 +1,16 @@
 package com.heybuddy
 
 import android.content.Context
+import com.heybuddy.files.TempFileCleaner
 import com.heybuddy.security.BiometricUnlocker
 import com.heybuddy.security.DatabaseKeyProvider
+import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
 import com.heybuddy.security.VaultLockState
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
+import com.heybuddy.util.VAULT_FOLDER_NAME
+import com.heybuddy.util.VIEW_TEMP_FOLDER_NAME
 import java.io.File
 
 /**
@@ -33,6 +37,18 @@ class AppContainer(private val appContext: Context) {
 
     /** The SQLCipher passphrase; its in-memory copy is wiped every time the vault locks. */
     val databaseKeyProvider: DatabaseKeyProvider = createDatabaseKeyProvider()
+
+    // filesDir: app-private storage only, never external storage (spec 5.4).
+    private val vaultDir: File = File(appContext.filesDir, VAULT_FOLDER_NAME)
+
+    // noBackupFilesDir: decrypted files for viewing must never reach a backup (rules 6 and 7).
+    private val viewTempDir: File = File(appContext.noBackupFilesDir, VIEW_TEMP_FOLDER_NAME)
+
+    /** Encrypts documents into the vault and decrypts them only after full verification. */
+    val fileCrypto: FileCrypto = FileCrypto(vaultDir, viewTempDir)
+
+    /** Deletes half-finished encryptions and leftover decrypted files. */
+    val tempFileCleaner: TempFileCleaner = TempFileCleaner(vaultDir, viewTempDir)
 
     private fun createDatabaseKeyProvider(): DatabaseKeyProvider {
         // noBackupFilesDir: app-private and never included in backups (rule 7).

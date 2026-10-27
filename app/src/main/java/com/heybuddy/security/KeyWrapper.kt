@@ -6,7 +6,6 @@ import com.google.crypto.tink.RegistryConfiguration
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.integration.android.AndroidKeystore
 import com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters
-import com.heybuddy.util.DOCUMENT_KEY_ASSOCIATED_DATA_PREFIX
 
 /**
  * Wraps (encrypts) and unwraps keys with the Keystore master key (rules 3 and 5).
@@ -106,10 +105,5 @@ class KeyWrapper(private val masterKeyManager: MasterKeyManager) {
         // UserNotAuthenticatedException reach us unchanged. (Tink's AndroidKeystoreAesGcm
         // would add a silent retry and write its own log lines, which we do not want.)
         return AndroidKeystore.getAead(masterKeyManager.keyAlias)
-    }
-
-    private fun documentAssociatedData(documentId: String): ByteArray {
-        val label = DOCUMENT_KEY_ASSOCIATED_DATA_PREFIX + documentId
-        return label.toByteArray(Charsets.UTF_8)
     }
 }

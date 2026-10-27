@@ -19,6 +19,8 @@ class HeyBuddyApp : Application() {
         // Tink must know the streaming AEAD key type before any document key is created or read.
         StreamingAeadConfig.register()
         container = AppContainer(appContext = this)
+        // A crash can leave half-encrypted .tmp files or decrypted view files behind (rule 6).
+        container.tempFileCleaner.cleanOnStart()
         SafeLog.info(LogEvent.APP_STARTED)
     }
 }

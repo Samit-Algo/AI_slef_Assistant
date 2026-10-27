@@ -40,6 +40,24 @@ const val MASTER_KEY_SIZE_BITS: Int = 256
 /** How long (in seconds) the app may sit with no touches before it locks itself (rule 9). */
 const val IDLE_LOCK_SECONDS: Int = 120
 
+/** Folder inside filesDir (app-private) that holds the encrypted documents. Renaming it orphans the vault. */
+const val VAULT_FOLDER_NAME: String = "vault"
+
+/** Folder inside noBackupFilesDir for decrypted PDFs while they are viewed (rule 6). Emptied on every app start. */
+const val VIEW_TEMP_FOLDER_NAME: String = "view_tmp"
+
+/** Ending of an encrypted document file: vault/<id>.bin. */
+const val ENCRYPTED_FILE_SUFFIX: String = ".bin"
+
+/** Ending of a file still being encrypted. Renamed to .bin only when encryption finished. */
+const val ENCRYPTING_TEMP_SUFFIX: String = ".tmp"
+
+/** Ending of a file still being decrypted into view_tmp. Renamed only after full verification. */
+const val DECRYPTING_PART_SUFFIX: String = ".part"
+
+/** Bytes copied per step while streaming. 8 KB keeps memory use tiny and still copies quickly. */
+const val STREAM_BUFFER_BYTES: Int = 8 * 1024
+
 /** Bytes in one megabyte, so file size limits can be written in megabytes. */
 private const val BYTES_PER_MEGABYTE: Long = 1024L * 1024L
 
