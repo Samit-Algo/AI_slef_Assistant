@@ -75,6 +75,8 @@ data class RenameDialogState(
  * @property errorMessage Why it failed, or null.
  * @property canRetry True when the failure was a cancelled "Confirm it's you".
  * @property rename The Rename dialog, or null when it is closed.
+ * @property deleteConfirmOpen True while "Delete this document?" is showing.
+ * @property deleting True while the document is being deleted.
  */
 data class ViewerUiState(
     val stage: ViewerStage = ViewerStage.OPENING,
@@ -87,6 +89,8 @@ data class ViewerUiState(
     @StringRes val errorMessage: Int? = null,
     val canRetry: Boolean = false,
     val rename: RenameDialogState? = null,
+    val deleteConfirmOpen: Boolean = false,
+    val deleting: Boolean = false,
 ) {
     /** True when there is a page before the current one. */
     val hasPreviousPage: Boolean
@@ -192,16 +196,50 @@ class ViewerViewModel(
 
     /**
      * Handles the system Back gesture/button.
-     * With the Rename dialog open, Back closes only the dialog; otherwise the viewer tidies up and
-     * goes back to the vault list.
+     * With a dialog open (Rename or Delete), Back closes only the dialog; otherwise the viewer
+     * tidies up and goes back to the vault list. While deleting, Back waits for the delete.
      */
     fun onBack() {
-        if (mutableUiState.value.rename != null) {
+        val current = mutableUiState.value
+        if (current.rename != null) {
             closeRename()
             return
         }
+        if (current.deleteConfirmOpen) {
+            closeDelete()
+            return
+        }
+        if (current.deleting) return
         release()
         navigator.handleBack()
+    }
+
+    /** Opens "Delete this document?". */
+    fun openDelete() {
+        val current = mutableUiState.value
+        if (current.stage != ViewerStage.READY) return
+        mutableUiState.value = current.copy(deleteConfirmOpen = true)
+    }
+
+    /** Closes "Delete this document?" without deleting. */
+    fun closeDelete() {
+        mutableUiState.value = mutableUiState.value.copy(deleteConfirmOpen = false)
+    }
+
+    /**
+     * Deletes the open document after the user confirmed.
+     *
+     * The viewer tidies up FIRST (PDF closed and deleted from view_tmp, picture freed), so nothing
+     * decrypted is left over; then the repository deletes the row (with its wrapped key) and the
+     * .bin, in the Task 1.6 order; then the app goes back to the list.
+     */
+    fun confirmDelete() {
+        val documentId = currentDocumentId ?: return
+        val current = mutableUiState.value
+        if (!current.deleteConfirmOpen) return
+        mutableUiState.value = current.copy(deleteConfirmOpen = false, deleting = true)
+        release()
+        viewModelScope.launch { deleteAndLeave(documentId) }
     }
 
     /** Opens the Rename dialog with the current name filled in. */
@@ -323,6 +361,21 @@ class ViewerViewModel(
             mutableUiState.value = mutableUiState.value.copy(picture = page, pageIndex = pageIndex, pageLoading = false)
             recycleOnceHidden(previousPicture)
         }
+    }
+
+    private suspend fun deleteAndLeave(documentId: String) {
+        try {
+            repository.deleteDocument(documentId)
+        } catch (locked: VaultLockedException) {
+            // The lock listener already cleared the screen; the delete can be done after unlock.
+            return
+        } catch (failed: Exception) {
+            mutableUiState.value = mutableUiState.value.copy(deleting = false)
+            fail(R.string.viewer_error_delete, canRetry = false)
+            return
+        }
+        mutableUiState.value = ViewerUiState()
+        navigator.backToList()
     }
 
     private suspend fun saveRename(documentId: String, newName: String) {

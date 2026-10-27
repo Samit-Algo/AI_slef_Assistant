@@ -50,8 +50,17 @@ const val MASTER_KEY_SIZE_BITS: Int = 256
  */
 const val EXTERNAL_SCREEN_PASS_SECONDS: Int = 120
 
-/** How long (in seconds) the app may sit with no touches before it locks itself (rule 9). */
+/**
+ * DEFAULT time (in seconds) the app may sit with no touches before it locks itself (rule 9).
+ * Since Task 1.10 the user can choose 1, 2 or 5 minutes in Settings; this is the starting value.
+ */
 const val IDLE_LOCK_SECONDS: Int = 120
+
+/** The SharedPreferences file for non-secret settings (theme, auto-lock time, onboarding done). */
+const val SETTINGS_FILE_NAME: String = "hey_buddy_settings"
+
+/** What the user must type to confirm "Delete everything". Exact match, capital letters. */
+const val DELETE_EVERYTHING_CONFIRMATION_WORD: String = "DELETE"
 
 /** Folder inside filesDir (app-private) that holds the encrypted documents. Renaming it orphans the vault. */
 const val VAULT_FOLDER_NAME: String = "vault"

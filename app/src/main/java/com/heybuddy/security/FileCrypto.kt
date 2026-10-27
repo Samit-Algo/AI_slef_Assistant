@@ -202,6 +202,20 @@ class FileCrypto(
         return File(vaultDir, documentId + ENCRYPTED_FILE_SUFFIX)
     }
 
+    /**
+     * The names of the plain files in the vault folder (for orphan cleanup, Task 1.10).
+     *
+     * @return File names only, no folders; empty if the folder does not exist yet.
+     */
+    fun vaultFileNames(): List<String> {
+        val files = vaultDir.listFiles() ?: return emptyList()
+        val names = mutableListOf<String>()
+        for (file in files) {
+            if (file.isFile) names.add(file.name)
+        }
+        return names
+    }
+
     private fun encryptToFile(input: InputStream, documentKey: KeysetHandle, documentId: String, file: File): Long {
         val streamingAead = streamingAeadFor(documentKey)
         val associatedData = documentAssociatedData(documentId)

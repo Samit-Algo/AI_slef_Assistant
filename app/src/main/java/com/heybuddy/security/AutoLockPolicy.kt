@@ -110,10 +110,16 @@ class BackgroundLockPolicy(private val clock: () -> Long) {
  * Decides when the vault locks for being left untouched (rule 9). Pure logic with a fake-able clock.
  *
  * @param clock Milliseconds that only go forward (SystemClock.elapsedRealtime in the app).
+ * @param idleLimitSeconds The idle time; read every time, so a change in Settings applies at once.
  */
-class IdleLockPolicy(private val clock: () -> Long) {
+class IdleLockPolicy(
+    private val clock: () -> Long,
+    private val idleLimitSeconds: () -> Int = { IDLE_LOCK_SECONDS },
+) {
 
-    private val idleLimitMillis = IDLE_LOCK_SECONDS * MILLIS_PER_SECOND
+    private val idleLimitMillis: Long
+        get() = idleLimitSeconds() * MILLIS_PER_SECOND
+
     private var lastActivityAt: Long = clock()
 
     /** A touch on the screen, or a letter typed into one of our fields. */
@@ -131,6 +137,6 @@ class IdleLockPolicy(private val clock: () -> Long) {
         return left.coerceAtLeast(0L)
     }
 
-    /** True once [IDLE_LOCK_SECONDS] have passed with no activity. */
+    /** True once the idle time has passed with no activity. */
     fun isIdleTooLong(): Boolean = millisUntilIdleLock() == 0L
 }

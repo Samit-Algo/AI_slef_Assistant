@@ -1,6 +1,7 @@
 package com.heybuddy
 
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.os.storage.StorageManager
 import com.heybuddy.data.VaultDatabaseHolder
 import com.heybuddy.data.VaultEraser
@@ -14,13 +15,23 @@ import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
 import com.heybuddy.security.VaultHealthMonitor
 import com.heybuddy.security.VaultLockState
+import com.heybuddy.settings.AppSettings
+import com.heybuddy.settings.DeleteEverythingFlow
+import com.heybuddy.settings.SharedPreferencesStore
 import com.heybuddy.ui.AutoLockController
 import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
+import com.heybuddy.util.LogEvent
+import com.heybuddy.util.SETTINGS_FILE_NAME
+import com.heybuddy.util.SafeLog
 import com.heybuddy.util.VAULT_DATABASE_NAME
 import com.heybuddy.util.VAULT_FOLDER_NAME
 import com.heybuddy.util.VIEW_TEMP_FOLDER_NAME
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
 
@@ -57,8 +68,18 @@ class AppContainer(private val appContext: Context) {
     /** The app's own lock. Starts locked every time the process starts. */
     val vaultLockState: VaultLockState = VaultLockState()
 
+    /**
+     * Theme, auto-lock time and "onboarding done". Not secret, so stored outside the vault in
+     * app-private preferences (never backed up: rule 7 excludes everything).
+     */
+    val appSettings: AppSettings =
+        AppSettings(SharedPreferencesStore(appContext.getSharedPreferences(SETTINGS_FILE_NAME, MODE_PRIVATE)))
+
     /** Locks automatically: on leaving the app, screen off, idle, and when a picker pass runs out (rule 9). */
-    val autoLock: AutoLockController = AutoLockController(vaultLockState)
+    val autoLock: AutoLockController = AutoLockController(
+        lockState = vaultLockState,
+        idleLimitSeconds = { appSettings.autoLock.value.seconds },
+    )
 
     /** Shows the fingerprint/PIN prompt and opens [vaultLockState] after a proven unlock. */
     val biometricUnlocker: BiometricUnlocker = BiometricUnlocker(
@@ -92,14 +113,42 @@ class AppContainer(private val appContext: Context) {
         VaultRepository(databaseHolder, vaultLockState, keyWrapper, fileCrypto)
 
     /** Deletes the whole vault for good (recovery screen now, Settings in Task 1.10). */
-    val vaultEraser: VaultEraser =
-        VaultEraser(appContext, vaultLockState, databaseHolder, masterKeyManager, vaultHealthMonitor, vaultFiles)
+    val vaultEraser: VaultEraser = VaultEraser(
+        context = appContext,
+        lockState = vaultLockState,
+        holder = databaseHolder,
+        masterKeyManager = masterKeyManager,
+        healthMonitor = vaultHealthMonitor,
+        files = vaultFiles,
+        // A real fresh start: theme and auto-lock back to defaults, and onboarding shows again.
+        onErased = appSettings::resetAll,
+    )
+
+    /** Settings → "Delete everything": "Confirm it's you", then [vaultEraser]. */
+    val deleteEverythingFlow: DeleteEverythingFlow = DeleteEverythingFlow(erase = vaultEraser::eraseEverything)
 
     /** Which vault screen is showing; back to the list on every lock and unlock (memory only). */
     val vaultNavigator: VaultNavigator = VaultNavigator(vaultLockState)
 
     /** Saves picked files into the vault. */
     val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository, ::freeSpaceForVault)
+
+    // For app-wide background work that must not depend on any screen (orphan cleanup).
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // Once after every unlock (owner decision): remove .bin files left by a crash.
+        vaultLockState.addOnUnlockListener { appScope.launch { removeOrphanFilesSafely() } }
+    }
+
+    private suspend fun removeOrphanFilesSafely() {
+        try {
+            vaultRepository.removeOrphanFiles()
+        } catch (failed: Exception) {
+            // Not urgent: an orphan file is unreadable anyway; the next unlock tries again.
+            SafeLog.error(LogEvent.ORPHAN_CLEANUP_FAILED, failed)
+        }
+    }
 
     // The vault folder lives inside filesDir, so filesDir's storage is the vault's storage.
     // getAllocatableBytes also counts cache Android can clear on its own, so a nearly full phone

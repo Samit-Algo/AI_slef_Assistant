@@ -45,6 +45,7 @@ import com.heybuddy.ui.components.LoadingState
 import com.heybuddy.ui.components.LocalObscuredTouchReporter
 import com.heybuddy.ui.components.rejectObscuredTouches
 import com.heybuddy.ui.components.MessageBanner
+import com.heybuddy.ui.components.DangerConfirmDialog
 import com.heybuddy.ui.components.PrimaryButton
 import com.heybuddy.ui.components.SecondaryButton
 import com.heybuddy.ui.theme.Dimens
@@ -60,6 +61,9 @@ import com.heybuddy.ui.theme.Dimens
  * @property onRenameTextChanged The Rename field changed.
  * @property onRenameConfirm Save in the Rename dialog.
  * @property onRenameDismiss Cancel (or Back) in the Rename dialog.
+ * @property onDeleteClick Delete chosen from the menu.
+ * @property onDeleteConfirm Delete confirmed in "Delete this document?".
+ * @property onDeleteDismiss Cancel (or Back) in "Delete this document?".
  */
 class ViewerActions(
     val onBack: () -> Unit,
@@ -70,10 +74,13 @@ class ViewerActions(
     val onRenameTextChanged: (String) -> Unit,
     val onRenameConfirm: () -> Unit,
     val onRenameDismiss: () -> Unit,
+    val onDeleteClick: () -> Unit = {},
+    val onDeleteConfirm: () -> Unit = {},
+    val onDeleteDismiss: () -> Unit = {},
 )
 
 /**
- * The document viewer: a zoomable photo, or a PDF one page at a time, with a Rename menu.
+ * The document viewer: a zoomable photo, or a PDF one page at a time, with Rename and Delete.
  *
  * @param uiState What to show.
  * @param actions What happens on each tap.
@@ -93,16 +100,26 @@ fun ViewerScreen(uiState: ViewerUiState, actions: ViewerActions) {
                 .consumeWindowInsets(innerPadding),
             contentAlignment = Alignment.Center,
         ) {
-            when (uiState.stage) {
-                ViewerStage.OPENING -> LoadingState(text = stringResource(R.string.viewer_opening))
-                ViewerStage.READY -> DocumentArea(uiState)
-                ViewerStage.FAILED -> FailedSection(uiState, actions)
+            when {
+                uiState.deleting -> LoadingState(text = stringResource(R.string.viewer_deleting))
+                uiState.stage == ViewerStage.OPENING -> LoadingState(text = stringResource(R.string.viewer_opening))
+                uiState.stage == ViewerStage.READY -> DocumentArea(uiState)
+                else -> FailedSection(uiState, actions)
             }
         }
     }
     val dialog = uiState.rename
     if (dialog != null) {
         RenameDialog(dialog, actions)
+    }
+    if (uiState.deleteConfirmOpen) {
+        DangerConfirmDialog(
+            title = stringResource(R.string.delete_one_title),
+            body = stringResource(R.string.delete_one_body),
+            confirmText = stringResource(R.string.delete_one_confirm),
+            onCancel = actions.onDeleteDismiss,
+            onConfirm = actions.onDeleteConfirm,
+        )
     }
 }
 
@@ -120,7 +137,7 @@ private fun ViewerTopBar(uiState: ViewerUiState, actions: ViewerActions) {
             }
         },
         actions = {
-            if (uiState.stage == ViewerStage.READY) {
+            if (uiState.stage == ViewerStage.READY && !uiState.deleting) {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(painter = painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.viewer_menu))
                 }
@@ -131,6 +148,15 @@ private fun ViewerTopBar(uiState: ViewerUiState, actions: ViewerActions) {
                         onClick = {
                             menuOpen = false
                             actions.onRenameClick()
+                        },
+                    )
+                    val danger = MaterialTheme.colorScheme.error
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(R.string.viewer_delete), color = danger) },
+                        leadingIcon = { Icon(painter = painterResource(R.drawable.ic_delete), contentDescription = null, tint = danger) },
+                        onClick = {
+                            menuOpen = false
+                            actions.onDeleteClick()
                         },
                     )
                 }

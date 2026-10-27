@@ -95,7 +95,7 @@ class AutoLockPolicyTest {
 
     @Test
     fun idleLocksAfterTheIdleTime() {
-        val idle = IdleLockPolicy { now }
+        val idle = IdleLockPolicy(clock = { now })
 
         now += IDLE_LOCK_SECONDS * 1000L - 1
         val justBefore = idle.isIdleTooLong()
@@ -108,7 +108,7 @@ class AutoLockPolicyTest {
 
     @Test
     fun aTouchOrTypingResetsTheIdleTime() {
-        val idle = IdleLockPolicy { now }
+        val idle = IdleLockPolicy(clock = { now })
         now += 100_000L
 
         idle.onUserActivity()

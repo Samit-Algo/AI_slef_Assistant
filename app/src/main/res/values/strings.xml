@@ -71,6 +71,68 @@
     <string name="viewer_error_other">Something went wrong while opening this document. Please try again.</string>
     <string name="rename_title">Rename document</string>
     <string name="rename_save">Save</string>
+    <string name="viewer_delete">Delete</string>
+    <string name="delete_one_title">Delete this document?</string>
+    <string name="delete_one_body">It will be removed from your vault for good and can\'t be brought back.\n\nThe original file in your gallery or downloads is not touched.</string>
+    <string name="delete_one_confirm">Delete</string>
+    <string name="viewer_deleting">Deleting…</string>
+    <string name="viewer_error_delete">This document couldn\'t be deleted. Please go back and try again.</string>
+
+    <!-- Shown while "Delete everything" runs -->
+    <string name="erasing_text">Deleting your vault…</string>
+
+    <!-- Onboarding (spec 5.6) -->
+    <string name="onboarding_card1_title">Your documents stay on this phone</string>
+    <string name="onboarding_card1_body">Hey Buddy keeps your Aadhaar, PAN, licence and other documents in an encrypted vault on this phone. They are never uploaded anywhere.</string>
+    <string name="onboarding_card2_title">No internet</string>
+    <string name="onboarding_card2_body">Hey Buddy has no internet permission at all, so it cannot send your documents anywhere, even by mistake.</string>
+    <string name="onboarding_card3_title">Only you can unlock</string>
+    <string name="onboarding_card3_body">The vault opens only with your fingerprint or your phone\'s PIN, pattern or password.</string>
+    <string name="no_backup_warning">There is no backup. If your phone\'s screen lock is removed or the phone is reset, your vault is erased for safety. Keep the original documents somewhere safe too.</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_start">Set up my vault</string>
+    <string name="onboarding_page_of">Card %1$d of %2$d</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_open">Settings</string>
+    <string name="settings_auto_lock_title">Auto-lock</string>
+    <string name="settings_auto_lock_body">Lock the vault after this long without a touch. It also always locks when you leave the app or the screen turns off.</string>
+    <string name="settings_auto_lock_one">1 minute</string>
+    <string name="settings_auto_lock_two">2 minutes</string>
+    <string name="settings_auto_lock_five">5 minutes</string>
+    <string name="settings_theme_title">Theme</string>
+    <string name="settings_theme_follow">Follow phone</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_privacy_title">Your privacy</string>
+    <string name="settings_privacy_no_internet">No internet: Hey Buddy cannot send anything anywhere.</string>
+    <string name="settings_privacy_no_backup">No cloud backup: your documents are never copied to the cloud.</string>
+    <string name="settings_privacy_on_phone">Stays on this phone: only you can unlock it.</string>
+    <string name="settings_licences_title">Open-source licences</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
+    <string name="settings_danger_title">Delete everything</string>
+    <string name="settings_danger_body">Deletes every document, the vault\'s key and its database from this phone.</string>
+    <string name="settings_delete_everything">Delete everything</string>
+    <string name="delete_all_title">Delete everything?</string>
+    <string name="delete_all_body">This deletes ALL documents in your vault, the vault\'s key and its database, for good. They can\'t be brought back.\n\nYour original files in the gallery or downloads are not touched.\n\nTo continue, type DELETE below. You will then confirm with your fingerprint or PIN.</string>
+    <string name="delete_all_field_label">Type DELETE</string>
+    <string name="delete_all_confirm">Delete everything</string>
+    <string name="delete_all_prompt_subtitle">Confirm to delete everything in your vault</string>
+    <string name="delete_all_not_confirmed">Nothing was deleted, because your fingerprint or PIN was not confirmed.</string>
+
+    <!-- Open-source licences -->
+    <string name="licence_name_inter">Inter font</string>
+    <string name="licence_name_symbols">Material Symbols icons</string>
+    <string name="licence_name_androidx">Android Jetpack (Compose, Activity, Core, Lifecycle, Fragment, Biometric, Room and other AndroidX libraries)</string>
+    <string name="licence_name_kotlin">Kotlin and kotlinx.coroutines</string>
+    <string name="licence_name_tink">Google Tink</string>
+    <string name="licence_name_small">Gson, Guava (ListenableFuture), Error Prone annotations, JSR-305 annotations, JetBrains annotations, JSpecify</string>
+    <string name="licence_name_sqlcipher">SQLCipher for Android</string>
+    <string name="licence_type_ofl">SIL Open Font License 1.1</string>
+    <string name="licence_type_apache">Apache License 2.0</string>
+    <string name="licence_type_sqlcipher">BSD-style licence (Zetetic LLC); includes SQLite (public domain)</string>
     <string name="add_document_button">Add document</string>
     <string name="vault_title">Your vault</string>
 

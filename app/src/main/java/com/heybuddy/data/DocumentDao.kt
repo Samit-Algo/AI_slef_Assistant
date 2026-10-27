@@ -42,6 +42,14 @@ interface DocumentDao {
     suspend fun findById(id: String): DocumentEntity?
 
     /**
+     * Lists every document id (for orphan file cleanup).
+     *
+     * @return All ids in the table.
+     */
+    @Query("SELECT id FROM documents")
+    suspend fun allIds(): List<String>
+
+    /**
      * Changes a document's name.
      *
      * @param id The document's id.

@@ -1,6 +1,7 @@
 package com.heybuddy.data
 
 import com.heybuddy.files.DetectedFileType
+import com.heybuddy.files.findOrphanIds
 import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.VerifiedBytes
@@ -212,6 +213,37 @@ class VaultRepository(
             }
         }
         SafeLog.info(LogEvent.DOCUMENT_DELETED)
+    }
+
+    /**
+     * Deletes encrypted files that no row points to (left only by a crash). Runs once after unlock.
+     *
+     * Runs INSIDE [VaultDatabaseHolder.withDatabase], so it can never overlap a save: during a save
+     * the new .bin exists for a moment before its row, and must not be mistaken for an orphan.
+     * Only files named exactly "<valid UUID>.bin" are considered (owner rule B); nothing else in the
+     * folder is touched. Only the NUMBER of removed files is logged, never names.
+     *
+     * @return How many files were removed.
+     * @throws VaultLockedException If the vault is locked.
+     */
+    suspend fun removeOrphanFiles(): Int {
+        val removed = withContext(ioDispatcher + NonCancellable) {
+            holder.withDatabase { database ->
+                val knownIds = database.documentDao().allIds().toSet()
+                val orphanIds = findOrphanIds(fileCrypto.vaultFileNames(), knownIds)
+                deleteFiles(orphanIds)
+            }
+        }
+        SafeLog.info(LogEvent.ORPHAN_FILES_REMOVED, count = removed)
+        return removed
+    }
+
+    private fun deleteFiles(documentIds: List<String>): Int {
+        var removed = 0
+        for (documentId in documentIds) {
+            if (fileCrypto.encryptedFileFor(documentId).delete()) removed++
+        }
+        return removed
     }
 
     private suspend fun saveInsideDatabase(

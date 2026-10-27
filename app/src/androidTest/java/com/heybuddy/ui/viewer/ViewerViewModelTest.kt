@@ -173,6 +173,37 @@ class ViewerViewModelTest {
         assertFalse(viewModel.uiState.value.canRetry)
     }
 
+    @Test
+    fun deletingAPdfRemovesRowFileAndViewCopyAndReturnsToTheList() {
+        val documentId = save(TestVault.sampleTwoPagePdfBytes(), "Sample PDF", DocumentType.CERTIFICATE, "application/pdf")
+        openAndWaitForPicture(documentId)
+        assertEquals(1, vault.viewTempDir.listFiles()?.size)
+
+        onMain {
+            viewModel.openDelete()
+            viewModel.confirmDelete()
+        }
+        waitUntil("back at the list") { vault.navigator.screen.value == VaultScreen.List }
+
+        val remaining = runBlocking { vault.repository.observeDocuments().first() }
+        assertTrue("row gone", remaining.isEmpty())
+        assertFalse(".bin gone", vault.fileCrypto.encryptedFileFor(documentId).exists())
+        assertTrue("view_tmp empty", vault.viewTempDir.listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun backWithTheDeleteDialogOpenClosesOnlyTheDialog() {
+        val documentId = save(TestVault.sampleJpegBytes(), "Sample photo", DocumentType.PHOTO, "image/jpeg")
+        openAndWaitForPicture(documentId)
+        onMain { viewModel.openDelete() }
+
+        onMain { viewModel.onBack() }
+
+        assertFalse(viewModel.uiState.value.deleteConfirmOpen)
+        assertEquals(VaultScreen.Viewer(documentId), vault.navigator.screen.value)
+        assertTrue(vault.fileCrypto.encryptedFileFor(documentId).exists())
+    }
+
     private fun save(bytes: ByteArray, name: String, type: DocumentType, mimeType: String): String {
         return runBlocking {
             vault.repository.saveDocument(ByteArrayInputStream(bytes), name, type, mimeType).id

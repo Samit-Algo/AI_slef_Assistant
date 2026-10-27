@@ -6,6 +6,7 @@ import com.heybuddy.security.IdleLockPolicy
 import com.heybuddy.security.LockDecision
 import com.heybuddy.security.LockStatus
 import com.heybuddy.security.VaultLockState
+import com.heybuddy.util.IDLE_LOCK_SECONDS
 import com.heybuddy.util.LogEvent
 import com.heybuddy.util.SafeLog
 import kotlinx.coroutines.CoroutineScope
@@ -15,22 +16,24 @@ import kotlinx.coroutines.launch
 
 /**
  * Locks the vault automatically (rule 9): when the app leaves the screen, when the screen turns
- * off, after a pass to our own system screen runs out, and after [com.heybuddy.util.IDLE_LOCK_SECONDS]
- * without a touch. The decisions live in [BackgroundLockPolicy] and [IdleLockPolicy]; this class
- * only feeds them events and runs the timers.
+ * off, after a pass to our own system screen runs out, and after the chosen idle time without a
+ * touch. The decisions live in [BackgroundLockPolicy] and [IdleLockPolicy]; this class only feeds
+ * them events and runs the timers.
  *
  * All methods are called on the main thread.
  *
  * @param lockState The app's lock.
+ * @param idleLimitSeconds The idle time chosen in Settings (1, 2 or 5 minutes).
  * @param clock Milliseconds that only go forward (elapsedRealtime), so date changes cannot cheat.
  */
 class AutoLockController(
     private val lockState: VaultLockState,
+    idleLimitSeconds: () -> Int = { IDLE_LOCK_SECONDS },
     clock: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
 
     private val backgroundPolicy = BackgroundLockPolicy(clock)
-    private val idlePolicy = IdleLockPolicy(clock)
+    private val idlePolicy = IdleLockPolicy(clock, idleLimitSeconds)
     private var passTimer: Job? = null
     private var idleTimer: Job? = null
 
@@ -57,6 +60,16 @@ class AutoLockController(
     /** A touch on our screen, or a letter typed into one of our fields. */
     fun onUserActivity() {
         idlePolicy.onUserActivity()
+    }
+
+    /**
+     * The idle time was changed in Settings. The running countdown may be sleeping for the OLD
+     * (longer) time, so it is restarted to use the new one at once.
+     */
+    fun onIdleLimitChanged() {
+        idlePolicy.onUserActivity()
+        val scope = visibleScope ?: return
+        if (lockState.status.value == LockStatus.UNLOCKED) startIdleTimer(scope)
     }
 
     /**

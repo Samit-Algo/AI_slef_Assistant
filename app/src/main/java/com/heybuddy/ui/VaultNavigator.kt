@@ -14,6 +14,9 @@ sealed interface VaultScreen {
     /** Adding a new document. */
     data object AddDocument : VaultScreen
 
+    /** Settings (only reachable while unlocked). */
+    data object Settings : VaultScreen
+
     /**
      * Viewing one document.
      *

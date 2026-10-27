@@ -6,6 +6,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.content.res.Configuration
+import android.graphics.Color
+import androidx.activity.SystemBarStyle
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.toArgb
+import com.heybuddy.settings.ThemeChoice
+import com.heybuddy.ui.components.LoadingState
+import com.heybuddy.ui.components.ScreenScaffold
+import com.heybuddy.ui.onboarding.OnboardingScreen
+import com.heybuddy.ui.settings.LicenceTextScreen
+import com.heybuddy.ui.settings.SettingsActions
+import com.heybuddy.ui.settings.SettingsScreen
+import com.heybuddy.ui.settings.SettingsViewModel
+import com.heybuddy.ui.theme.HeyBuddyDarkColors
+import com.heybuddy.ui.theme.HeyBuddyLightColors
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -39,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -93,16 +109,42 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val startDark = isDarkFor(container.appSettings.theme.value, isPhoneInDarkMode())
         // Draw behind the system bars; ScreenScaffold keeps content clear of them (spec 5.14).
-        enableEdgeToEdge()
+        applySystemBars(startDark)
         super.onCreate(savedInstanceState)
+        // The chosen theme's background from the very first frame: no white flash in dark mode.
+        applyWindowBackground(startDark)
         protectWindow()
         registerScreenOffReceiver()
         setContent {
-            HeyBuddyTheme {
+            val themeChoice by container.appSettings.theme.collectAsStateWithLifecycle()
+            val dark = isDarkFor(themeChoice, isSystemInDarkTheme())
+            LaunchedEffect(dark) {
+                applySystemBars(dark)
+                applyWindowBackground(dark)
+            }
+            HeyBuddyTheme(darkTheme = dark) {
                 AppRoot(container = container, activity = this)
             }
         }
+    }
+
+    // Status/navigation bar icons must match the app's theme, not the phone's, when they differ.
+    private fun applySystemBars(dark: Boolean) {
+        val transparent = Color.TRANSPARENT
+        val style = if (dark) SystemBarStyle.dark(transparent) else SystemBarStyle.light(transparent, transparent)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+    }
+
+    private fun applyWindowBackground(dark: Boolean) {
+        val scheme = if (dark) HeyBuddyDarkColors else HeyBuddyLightColors
+        window.setBackgroundDrawable(scheme.background.toArgb().toDrawable())
+    }
+
+    private fun isPhoneInDarkMode(): Boolean {
+        val nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return nightMode == Configuration.UI_MODE_NIGHT_YES
     }
 
     override fun onStart() {
@@ -157,7 +199,9 @@ private fun AppRoot(container: AppContainer, activity: FragmentActivity) {
         onPauseOrDispose {}
     }
 
-    val targetScreen = chooseTopScreen(isDeviceSecure, lockStatus, condition)
+    val onboardingDone by container.appSettings.onboardingDone.collectAsStateWithLifecycle()
+    val erasing by container.vaultEraser.erasing.collectAsStateWithLifecycle()
+    val targetScreen = chooseTopScreen(isDeviceSecure, lockStatus, condition, onboardingDone, erasing)
     var openedScreen by remember { mutableStateOf(targetScreen) }
     var unlockSucceeded by remember { mutableStateOf(false) }
     val view = LocalView.current
@@ -187,6 +231,13 @@ private fun AppRoot(container: AppContainer, activity: FragmentActivity) {
             label = "topScreen",
         ) { screen ->
             when (screen) {
+                TopScreen.ERASING -> ErasingScreen()
+                TopScreen.ONBOARDING -> OnboardingScreen(
+                    onFinished = {
+                        SafeLog.info(LogEvent.ONBOARDING_FINISHED)
+                        container.appSettings.markOnboardingDone()
+                    },
+                )
                 TopScreen.NO_SCREEN_LOCK -> NoScreenLockScreen()
                 TopScreen.RECOVERY -> RecoveryRoute(container = container)
                 TopScreen.UNLOCK -> UnlockRoute(container = container, activity = activity, unlockSucceeded = unlockSucceeded)
@@ -232,6 +283,29 @@ private fun ObscuredTouchNoticeHost(content: @Composable () -> Unit) {
 
 /** How long the "another app is drawing over Hey Buddy" message stays on screen. */
 private const val OVERLAY_NOTICE_MILLIS = 6_000L
+
+/** Shown while "Delete everything" runs: nothing to tap, so nothing can interfere. */
+@Composable
+private fun ErasingScreen() {
+    ScreenScaffold(centerContent = true) {
+        LoadingState(text = stringResource(R.string.erasing_text))
+    }
+}
+
+/**
+ * Light or dark for the chosen theme.
+ *
+ * @param choice The theme from Settings.
+ * @param phoneIsDark Whether the phone itself is in dark mode.
+ * @return true for the dark theme.
+ */
+private fun isDarkFor(choice: ThemeChoice, phoneIsDark: Boolean): Boolean {
+    return when (choice) {
+        ThemeChoice.FOLLOW_PHONE -> phoneIsDark
+        ThemeChoice.LIGHT -> false
+        ThemeChoice.DARK -> true
+    }
+}
 
 @Composable
 private fun RecoveryRoute(container: AppContainer) {
@@ -301,6 +375,7 @@ private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
                     documents = documents,
                     onOpenDocument = { documentId -> navigator.open(VaultScreen.Viewer(documentId)) },
                     onAddDocument = { navigator.open(VaultScreen.AddDocument) },
+                    onOpenSettings = { navigator.open(VaultScreen.Settings) },
                 )
             }
             VaultScreen.AddDocument -> AddDocumentRoute(
@@ -308,6 +383,7 @@ private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
                 activity = activity,
                 onClose = { navigator.handleBack() },
             )
+            VaultScreen.Settings -> SettingsRoute(container = container, activity = activity)
             is VaultScreen.Viewer -> ViewerRoute(container = container, activity = activity, documentId = shown.documentId)
         }
     }
@@ -352,8 +428,70 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
             },
             onRenameConfirm = viewerViewModel::confirmRename,
             onRenameDismiss = viewerViewModel::closeRename,
+            onDeleteClick = viewerViewModel::openDelete,
+            onDeleteConfirm = viewerViewModel::confirmDelete,
+            onDeleteDismiss = viewerViewModel::closeDelete,
         ),
     )
+}
+
+@Composable
+private fun SettingsRoute(container: AppContainer, activity: FragmentActivity) {
+    val settingsViewModel: SettingsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                SettingsViewModel(
+                    settings = container.appSettings,
+                    deleteFlow = container.deleteEverythingFlow,
+                    unlocker = container.biometricUnlocker,
+                    onIdleLimitChanged = container.autoLock::onIdleLimitChanged,
+                    lockState = container.vaultLockState,
+                )
+            }
+        },
+    )
+    val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val theme by settingsViewModel.theme.collectAsStateWithLifecycle()
+    val autoLock by settingsViewModel.autoLock.collectAsStateWithLifecycle()
+    val navigator = container.vaultNavigator
+    // Back closes the licence text or the dialog first; otherwise returns to the list.
+    val goBack = {
+        val usedHere = settingsViewModel.onBack()
+        if (!usedHere) navigator.handleBack()
+    }
+    BackHandler(onBack = goBack)
+    val licence = uiState.openLicence
+    if (licence != null) {
+        LicenceTextScreen(entry = licence, onBack = goBack)
+        return
+    }
+    SettingsScreen(
+        theme = theme,
+        autoLock = autoLock,
+        uiState = uiState,
+        versionText = versionText(activity),
+        actions = SettingsActions(
+            onBack = goBack,
+            onThemeChosen = settingsViewModel::setTheme,
+            onAutoLockChosen = settingsViewModel::setAutoLock,
+            onLicenceClick = settingsViewModel::openLicence,
+            onDeleteAllClick = settingsViewModel::openDeleteAll,
+            onDeleteTextChanged = { text ->
+                // Keyboard taps go to the keyboard's window, so typing is reported to the idle timer here.
+                container.autoLock.onUserActivity()
+                settingsViewModel.onDeleteTextChanged(text)
+            },
+            onDeleteAllConfirm = { settingsViewModel.confirmDeleteAll(activity) },
+            onDeleteAllDismiss = settingsViewModel::closeDeleteAll,
+        ),
+    )
+}
+
+@Composable
+private fun versionText(context: Context): String {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    val versionName = info.versionName ?: ""
+    return stringResource(R.string.settings_version, versionName, info.longVersionCode.toInt())
 }
 
 @Composable

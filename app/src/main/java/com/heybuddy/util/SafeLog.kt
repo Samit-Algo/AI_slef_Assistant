@@ -40,6 +40,11 @@ enum class LogEvent(val message: String) {
     AUTO_LOCK_IDLE("Vault locked: no touch for the idle time"),
     VAULT_ERASED("Vault erased: key, database and files deleted"),
     TOUCH_BLOCKED_OVERLAY("Tap ignored: another app is drawing over Hey Buddy"),
+    ORPHAN_FILES_REMOVED("Orphan encrypted files removed"),
+    ORPHAN_CLEANUP_FAILED("Orphan file cleanup could not run"),
+    DELETE_EVERYTHING_CONFIRMED("Delete everything confirmed with fingerprint/PIN"),
+    DELETE_EVERYTHING_CANCELLED("Delete everything cancelled at fingerprint/PIN"),
+    ONBOARDING_FINISHED("Onboarding finished"),
 }
 
 /**
@@ -59,6 +64,18 @@ object SafeLog {
     fun info(event: LogEvent) {
         if (!BuildConfig.DEBUG) return
         Log.i(TAG, event.message)
+    }
+
+    /**
+     * Logs a fixed event with a count, for example how many orphan files were removed.
+     * A number never identifies a person or a document, so it is safe to log.
+     *
+     * @param event The fixed event to log.
+     * @param count The number to append.
+     */
+    fun info(event: LogEvent, count: Int) {
+        if (!BuildConfig.DEBUG) return
+        Log.i(TAG, "${event.message}: $count")
     }
 
     /**

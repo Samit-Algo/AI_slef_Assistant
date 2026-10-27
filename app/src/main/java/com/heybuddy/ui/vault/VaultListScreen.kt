@@ -5,7 +5,12 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -67,12 +72,14 @@ private val SpaceForAddButton = 88.dp
  * @param documents The documents, newest first (as VaultRepository gives them).
  * @param onOpenDocument Called with a document's id when its card is tapped.
  * @param onAddDocument Called when "+" is tapped.
+ * @param onOpenSettings Called when the settings button is tapped.
  */
 @Composable
 fun VaultListScreen(
     documents: List<DocumentSummary>,
     onOpenDocument: (String) -> Unit,
     onAddDocument: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -80,9 +87,9 @@ fun VaultListScreen(
         floatingActionButton = { AddButton(onAddDocument) },
     ) { innerPadding ->
         if (documents.isEmpty()) {
-            EmptyVault(innerPadding)
+            EmptyVault(innerPadding, onOpenSettings)
         } else {
-            DocumentList(documents, innerPadding, onOpenDocument)
+            DocumentList(documents, innerPadding, onOpenDocument, onOpenSettings)
         }
     }
 }
@@ -100,21 +107,28 @@ private fun AddButton(onAddDocument: () -> Unit) {
 }
 
 @Composable
-private fun EmptyVault(innerPadding: PaddingValues) {
+private fun EmptyVault(innerPadding: PaddingValues, onOpenSettings: () -> Unit) {
+    // The header stays at the top, in the same place as with documents (owner bug report, Task 1.10);
+    // only the empty message is centred in the space below it.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)
             .consumeWindowInsets(innerPadding)
-            .padding(horizontal = Dimens.ScreenPadding),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = Dimens.ScreenPadding)
+            .padding(top = Dimens.SpaceXl),
     ) {
-        VaultHeader(documentCount = 0)
-        EmptyState(
-            icon = R.drawable.ic_shield,
-            title = stringResource(R.string.vault_empty_title),
-            body = stringResource(R.string.vault_empty_body),
-        )
+        VaultHeader(documentCount = 0, onOpenSettings = onOpenSettings)
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmptyState(
+                icon = R.drawable.ic_shield,
+                title = stringResource(R.string.vault_empty_title),
+                body = stringResource(R.string.vault_empty_body),
+            )
+        }
     }
 }
 
@@ -123,6 +137,7 @@ private fun DocumentList(
     documents: List<DocumentSummary>,
     innerPadding: PaddingValues,
     onOpenDocument: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     // Cards already shown once do not animate again (for example when scrolling back up).
     val alreadyShown = remember { mutableSetOf<String>() }
@@ -139,7 +154,7 @@ private fun DocumentList(
         verticalArrangement = Arrangement.spacedBy(Dimens.SpaceM),
     ) {
         item(key = HEADER_KEY) {
-            VaultHeader(documentCount = documents.size)
+            VaultHeader(documentCount = documents.size, onOpenSettings = onOpenSettings)
         }
         items(items = documents, key = { document -> document.id }) { document ->
             val position = documents.indexOf(document)
@@ -149,9 +164,22 @@ private fun DocumentList(
 }
 
 @Composable
-private fun VaultHeader(documentCount: Int) {
+private fun VaultHeader(documentCount: Int, onOpenSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpaceS),
+        verticalAlignment = Alignment.Top,
+    ) {
+        HeaderTexts(documentCount = documentCount, modifier = Modifier.weight(1f))
+        IconButton(onClick = onOpenSettings) {
+            Icon(painter = painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.settings_open))
+        }
+    }
+}
+
+@Composable
+private fun HeaderTexts(documentCount: Int, modifier: Modifier) {
     Column(
-        modifier = Modifier.padding(bottom = Dimens.SpaceS),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
     ) {
         Text(

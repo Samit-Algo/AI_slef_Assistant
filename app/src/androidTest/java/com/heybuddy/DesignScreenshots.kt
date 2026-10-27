@@ -37,6 +37,15 @@ import com.heybuddy.ui.unlock.UnlockScreen
 import com.heybuddy.ui.unlock.UnlockUiState
 import com.heybuddy.data.DocumentSummary
 import com.heybuddy.data.TestVault
+import com.heybuddy.settings.AutoLockChoice
+import com.heybuddy.settings.ThemeChoice
+import com.heybuddy.ui.onboarding.OnboardingScreen
+import com.heybuddy.ui.settings.DeleteAllDialogState
+import com.heybuddy.ui.settings.LicenceEntry
+import com.heybuddy.ui.settings.LicenceTextScreen
+import com.heybuddy.ui.settings.SettingsActions
+import com.heybuddy.ui.settings.SettingsScreen
+import com.heybuddy.ui.settings.SettingsUiState
 import com.heybuddy.ui.vault.VaultListScreen
 import com.heybuddy.ui.viewer.PdfPageRenderer
 import com.heybuddy.ui.viewer.RenameDialogState
@@ -133,6 +142,40 @@ class DesignScreenshots {
             },
         )
         captureAll(folder, screens)
+    }
+
+    @Test
+    fun captureSettingsOnboardingAndDeleteDialogs() {
+        val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_1_10")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", picture = drawSamplePreview())
+        val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "01_onboarding_card1" to { OnboardingScreen(onFinished = {}) },
+            "02_onboarding_card2" to { OnboardingScreen(onFinished = {}, initialPage = 1) },
+            "03_onboarding_card3_warning" to { OnboardingScreen(onFinished = {}, initialPage = 2) },
+            "04_list_with_settings_button" to { VaultListScreen(documents = sampleDocuments(), onOpenDocument = {}, onAddDocument = {}) },
+            "12_list_empty_header_at_top" to { VaultListScreen(documents = emptyList(), onOpenDocument = {}, onAddDocument = {}) },
+            "05_settings" to { SettingsSample(SettingsUiState()) },
+            "06_settings_nothing_deleted" to { SettingsSample(SettingsUiState(notConfirmedNotice = true)) },
+            "07_delete_all_dialog_empty" to { SettingsSample(SettingsUiState(deleteDialog = DeleteAllDialogState())) },
+            "08_delete_all_dialog_typed" to { SettingsSample(SettingsUiState(deleteDialog = DeleteAllDialogState(typed = "DELETE"))) },
+            "09_licence_text" to { LicenceTextScreen(entry = LicenceEntry.SQLCIPHER, onBack = {}) },
+            "10_viewer_delete_dialog" to { ViewerScreen(viewingPhoto.copy(deleteConfirmOpen = true), noViewerActions()) },
+            "11_viewer_deleting" to { ViewerScreen(ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", deleting = true), noViewerActions()) },
+        )
+        captureAll(folder, screens)
+    }
+
+    @Composable
+    private fun SettingsSample(state: SettingsUiState) {
+        SettingsScreen(
+            theme = ThemeChoice.FOLLOW_PHONE,
+            autoLock = AutoLockChoice.TWO_MINUTES,
+            uiState = state,
+            versionText = "Version 0.1.0 (1)",
+            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}),
+        )
     }
 
     private fun captureAll(folder: File, screens: List<Pair<String, @Composable () -> Unit>>) {
