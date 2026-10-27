@@ -166,6 +166,9 @@ class AddDocumentViewModel(
         discardPickedFile()
     }
 
+    /** Test hook: the picked file kept in memory (the real object, not a copy), or null. */
+    internal fun pickedFileForTest(): PickedFile? = pickedFile
+
     private fun showSaveOutcome(outcome: SaveOutcome) {
         val current = mutableUiState.value
         // The vault may have locked during the save; reset() has then already cleared the screen.

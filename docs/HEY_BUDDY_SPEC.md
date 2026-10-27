@@ -233,7 +233,8 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.5 File encryption** | `FileCrypto` with streaming AEAD and id as associated data (rules 3, 4, 6) | Tests: round trip OK; tampered file fails; wrong id fails |
 | **1.6 Database** | Room + SQLCipher, `DocumentEntity`, `DocumentDao`, `VaultRepository` | Test: save, list, rename, delete work; DB file unreadable without passphrase |
 | **1.7 Add document** | Picker, `FileTypeDetector` (rule 11), type + name form, save flow | Adding JPEG/PNG/WEBP/PDF works; a .txt renamed to .pdf is rejected |
-| **1.8 Vault list + viewer** | List screen, image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner` | Viewing works; `view_tmp` is empty after closing and after restart |
+| **1.8a Design system** | Section 5.14 (approved by owner first), then Theme, colours, type, shapes, reusable components; restyle Unlock, No screen lock and Add document | Owner approves light + dark screenshots of each screen |
+| **1.8b Vault list + viewer** | List screen (document cards per 5.14), image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner`; viewer menu: Rename only (Delete is Task 1.10) | Viewing works; `view_tmp` is empty after closing and after restart |
 | **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14). **Note:** the file pickers and the fingerprint/PIN prompt open other screens, which briefly puts Hey Buddy in the background; auto-lock must NOT lock the vault during these | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
 | **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6). Also: clean up orphan `.bin` files (a `.bin` with no row, left by a crash). **Note:** this cleanup must only run while no save is in progress, using the same database lock (`VaultDatabaseHolder.withDatabase`), because during a save a `.bin` exists briefly before its row | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
 | **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met. **Reminder:** remind the owner to delete the `Download/HeyBuddyTest/` sample-files folder on the test phone, and ask before deleting it | Owner approves the report |
@@ -269,6 +270,119 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, wait 40 seconds, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
 | Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | In Task 1.11: clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
 | Check C: "Choose a photo" opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose a photo"; the photo picker opens with no permission question |
+| Keyboard does not cover the Name field or the Save button (Add screen): NOT TESTED YET | 1.8a | Owner skipped this check; the screenshot test cannot open the keyboard | In Task 1.11: on the Add screen with a picked file, tap Name; the field and "Save to vault" must stay visible (or reachable by scrolling) above the keyboard |
+| Home-screen app icon looks right: NOT TESTED YET | 1.8a | Owner skipped this check. App info showed the themed (one-colour) icon correctly | In Task 1.11: check the icon on the home screen, with themed icons both on and off if the phone allows |
+| Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | In Task 1.11: switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
+
+### 5.14 UI design system — APPROVED by owner (2026-10-27)
+
+Owner decisions: Inter font; wallpaper colours off; Aadhaar in amber. Added by owner: an original
+adaptive app icon (sapphire shield/locker shape, no text, no government symbols; foreground,
+background and monochrome layers) and correct edge-to-edge handling of system bars and keyboard on
+every screen.
+
+**Feel:** calm, trustworthy, premium — like a good banking or password-manager app. Quiet surfaces, one strong brand colour, generous white space. Not playful: no cartoons, no bright gradients, no bouncy motion.
+
+#### Colours
+
+A fixed brand palette in both themes. The phone's wallpaper colours ("Material You") are switched OFF, so the app always looks the same and recognisably Hey Buddy.
+
+| Role | Light | Dark | Used for |
+| --- | --- | --- | --- |
+| Primary | `#1E4D8C` deep sapphire | `#A8C8FF` | Main buttons, focus, selected items |
+| On primary | `#FFFFFF` | `#0A2D5C` | Text/icons on primary |
+| Secondary | `#3D5A73` slate | `#B4C8DC` | Secondary buttons, chips |
+| Accent | `#0B6E60` deep teal | `#7AD6C4` | "Encrypted" label, success states |
+| Background | `#F5F7FB` | `#0E1117` | Screen background |
+| Surface | `#FFFFFF` | `#161A22` | Cards, sheets |
+| Surface variant | `#EBEFF5` | `#242936` | Input fields, quiet containers |
+| On surface | `#171A21` | `#E3E6EE` | Main text |
+| On surface variant | `#454C5B` | `#B8BFCD` | Secondary text (type, date) |
+| Outline | `#737B8C` | `#8A92A3` | Card borders, dividers |
+| Error | `#B3261E` | `#FFB4AB` | Error text and banners |
+
+**Measured contrast (WCAG):** all text pairs are between 7.2:1 and 17.4:1 (AA needs 4.5:1; most pass AAA's 7:1). Outline is 4.25:1 / 5.58:1 (non-text needs 3:1).
+
+#### Document types: one colour and one icon each
+
+Type colours are used for **icons only, never for text** (text always uses On surface / On surface variant). Each icon sits on a soft tint of its own colour (12% in light, 22% in dark).
+
+| Type | Icon (Material Symbols) | Light | Dark | Icon contrast light / dark |
+| --- | --- | --- | --- | --- |
+| Aadhaar | `badge` | `#B45309` amber | `#FBBF24` | 4.25 / 6.33 |
+| PAN | `credit_card` | `#4338CA` indigo | `#A5B4FC` | 6.48 / 5.49 |
+| Driving licence | `directions_car` | `#0F766E` teal | `#5EEAD4` | 4.64 / 6.74 |
+| Passport | `flight` | `#1D4ED8` blue | `#93C5FD` | 5.57 / 5.85 |
+| Photo | `photo_camera` | `#7E22CE` purple | `#D8B4FE` | 5.71 / 5.96 |
+| Signature | `signature` | `#BE185D` rose | `#F9A8D4` | 4.93 / 5.92 |
+| Certificate | `workspace_premium` | `#15803D` green | `#86EFAC` | 4.27 / 6.96 |
+| Other | `description` | `#475569` slate | `#CBD5E1` | 6.34 / 6.70 |
+
+All pass the 3:1 rule for icons. Colour is never the only signal: every card also shows the type name in text.
+
+#### Typography
+
+- **Font: Inter** (version 4), by Rasmus Andersson. **Licence: SIL Open Font License 1.1** — free to bundle in a commercial app; the licence text ships with the app (an "Open-source licences" line in Settings, Task 1.10).
+- Bundled as 3 font files in `res/font` (Regular 400, Medium 500, SemiBold 600), about 1.2 MB in total. **No downloadable fonts** — the app has no internet.
+- Inter has no Devanagari letters; names typed in Hindi automatically fall back to the phone's own Devanagari font.
+- All sizes in `sp`, so they grow with the phone's font-size setting.
+
+| Style | Size / line height | Weight | Used for |
+| --- | --- | --- | --- |
+| Headline | 28 / 36 | SemiBold | Screen titles ("Your vault") |
+| Title | 20 / 28 | SemiBold | Section and dialog titles |
+| Card title | 16 / 24 | Medium | Document name |
+| Body | 16 / 24 | Regular | Normal text |
+| Body small | 14 / 20 | Regular | Type and date, helper text |
+| Label | 14 / 20 | Medium | Buttons |
+| Caption | 12 / 16 | Medium | "Encrypted" label, badges |
+
+#### Spacing, shape and elevation
+
+- **Spacing scale (dp):** 4, 8, 12, 16, 24, 32, 48. Screen side padding 24; space between cards 12.
+- **Corner radius:** small 8 (badges, chips), medium 12 (inputs, banners), large 16 (cards, buttons), extra large 28 (dialogs, bottom sheets), full (round "+" button).
+- **Cards:** Surface colour, 1 dp Outline border at low strength, no shadow (flat, calm). Pressed state: a light primary tint.
+- **Elevation:** only the "+" button (level 3) and dialogs/sheets (level 3) cast a shadow. Everything else is flat.
+
+#### Buttons
+
+| Style | Look | Used for |
+| --- | --- | --- |
+| Primary | Filled Primary, 52 dp high, radius 16, Label text | One main action per screen (Unlock, Save to vault) |
+| Secondary | Outlined, same size | Second choice (Choose a PDF or file) |
+| Text | No border | Low-key actions (Cancel) |
+| Floating "+" | Round, 56 dp, Primary, level 3 shadow | Add document (vault list) |
+
+#### Icons
+
+Only the Material Symbols (Outlined, weight 400) icons we use, copied as vector drawable XML files into `res/drawable`. **No icon library.** Material Symbols are by Google under the **Apache License 2.0** (listed with the font licence).
+
+Planned set: the 8 type icons above, plus `lock`, `lock_open`, `fingerprint`, `add`, `arrow_back`, `more_vert`, `edit`, `check_circle`, `error`, `info`, `picture_as_pdf`, `image`, `chevron_left`, `chevron_right`, `shield` (about 23 files).
+
+#### Motion and haptics
+
+- **Screen changes:** a short fade + slight slide (about 250 ms).
+- **List items:** fade in and rise 8 dp when they first appear (about 200 ms, slightly staggered).
+- **Unlock success:** the lock icon turns into an open lock with a short scale (about 300 ms) before the vault appears.
+- **Haptics:** a light "confirm" tap on successful unlock and on save (Android's built-in haptic feedback — **no vibrate permission needed**).
+- **Reduce animations:** if the phone's animation setting is off ("Remove animations" / animator scale 0), all motion is replaced by instant changes.
+
+#### Accessibility
+
+- Every touch target at least **48 x 48 dp**.
+- Every icon has a TalkBack description (decorative icons are marked as such, so they are skipped).
+- Works with the phone's largest font size: text wraps instead of cutting off; no fixed-height text boxes.
+- Contrast as measured above (AA everywhere, mostly AAA).
+
+#### Rules
+
+- **Never** use government logos, emblems or seals (Aadhaar logo, national emblem, Income Tax Department logo, etc.). Type icons are generic Material Symbols only.
+- **No document thumbnails in the list** — a card shows icon, name, type and date only, so nothing sensitive is visible at a glance.
+- Never show a document number or any document content outside the viewer.
+
+#### Reusable components (built in Task 1.8a)
+
+`PrimaryButton`, `SecondaryButton`, `DocumentCard`, `TypeBadge`, `EmptyState`, `MessageBanner` (info / success / error), `LoadingState`.
 
 ---
 

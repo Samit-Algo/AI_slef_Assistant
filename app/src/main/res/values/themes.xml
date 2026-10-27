@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window theme behind Compose. Its background matches the light theme's Background (spec 5.14),
+         so opening the app never flashes a different colour. -->
+    <style name="Theme.HeyBuddy" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

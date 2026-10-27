@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One-colour app icon for Android's themed icons: the same shield and keyhole; the system tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M54,31 L73,37.5 V53 C73,65.5 65,74.5 54,79 C43,74.5 35,65.5 35,53 V37.5 Z M54,44.5 A5.5,5.5 0 0,0 51.2,54.7 L50.3,63.5 H57.7 L56.8,54.7 A5.5,5.5 0 0,0 54,44.5 Z" />
+</vector>

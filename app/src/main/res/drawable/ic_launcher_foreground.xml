@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    App icon foreground: an original shield with a keyhole cut out (no text, no official symbols).
+    Everything stays inside the adaptive-icon safe zone (a 66dp circle in the middle of 108dp),
+    so no launcher mask can cut it off.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A slightly darker copy behind the shield gives it a quiet sense of depth. -->
+    <path
+        android:fillColor="#33000000"
+        android:pathData="M54,32.5 L73,39 V54.5 C73,67 65,76 54,80.5 C43,76 35,67 35,54.5 V39 Z" />
+    <!-- The shield; evenOdd turns the keyhole shape into a hole showing the background. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,31 L73,37.5 V53 C73,65.5 65,74.5 54,79 C43,74.5 35,65.5 35,53 V37.5 Z M54,44.5 A5.5,5.5 0 0,0 51.2,54.7 L50.3,63.5 H57.7 L56.8,54.7 A5.5,5.5 0 0,0 54,44.5 Z" />
+</vector>

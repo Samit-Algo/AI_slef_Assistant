@@ -1,35 +1,46 @@
 package com.heybuddy.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
+
+// Which theme is showing. Read by parts that pick their own colours (for example type badges),
+// so they always match the theme even when a caller forces light or dark.
+private val LocalDarkTheme = staticCompositionLocalOf { false }
 
 /**
- * The app's Material 3 theme. Follows the phone's light/dark setting.
+ * The app's theme (spec 5.14): fixed brand colours, Inter type, shapes, and the reduce-motion flag.
  *
- * @param content The screen content to show inside the theme.
+ * Wallpaper-based colours ("Material You") are deliberately not used, so Hey Buddy always looks
+ * the same and recognisably itself (owner decision).
+ *
+ * @param darkTheme Whether to use the dark theme. Follows the phone's setting by default.
+ * @param content The screen content.
  */
 @Composable
-fun HeyBuddyTheme(content: @Composable () -> Unit) {
-    val useDarkTheme = isSystemInDarkTheme()
-    val colorScheme = chooseColorScheme(useDarkTheme)
-    MaterialTheme(colorScheme = colorScheme, content = content)
+fun HeyBuddyTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = if (darkTheme) HeyBuddyDarkColors else HeyBuddyLightColors
+    val reduceMotion = rememberReduceMotion()
+    CompositionLocalProvider(
+        LocalDarkTheme provides darkTheme,
+        LocalReduceMotion provides reduceMotion,
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = HeyBuddyTypography,
+            shapes = HeyBuddyShapes,
+            content = content,
+        )
+    }
 }
 
-/** Uses the wallpaper-based colours on Android 12+, so the app feels native; plain Material colours before that. */
+/** True while the dark theme is showing. */
 @Composable
-private fun chooseColorScheme(useDarkTheme: Boolean): ColorScheme {
-    val supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    if (supportsDynamicColor) {
-        val context = LocalContext.current
-        return if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    }
-    return if (useDarkTheme) darkColorScheme() else lightColorScheme()
-}
+@ReadOnlyComposable
+fun isDarkThemeActive(): Boolean = LocalDarkTheme.current

@@ -4,32 +4,31 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,15 +37,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.heybuddy.R
 import com.heybuddy.data.DocumentType
 import com.heybuddy.files.DetectedFileType
+import com.heybuddy.ui.components.BannerKind
+import com.heybuddy.ui.components.HeroIcon
+import com.heybuddy.ui.components.LoadingState
+import com.heybuddy.ui.components.MessageBanner
+import com.heybuddy.ui.components.PrimaryButton
+import com.heybuddy.ui.components.QuietButton
+import com.heybuddy.ui.components.ScreenScaffold
+import com.heybuddy.ui.components.SecondaryButton
+import com.heybuddy.ui.components.TypeBadge
+import com.heybuddy.ui.theme.Dimens
+import com.heybuddy.ui.theme.performConfirmHaptic
 
 /** Every type the picker may offer; the real type is checked from the bytes afterwards. */
 private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { type -> type.mimeType }.toTypedArray()
+
+private val PreviewMaxHeight = 320.dp
 
 /**
  * The Add document screen: pick a file, see it, choose type and name, save.
@@ -56,7 +70,7 @@ private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { 
  * @param onTypeChosen Called when a type is picked from the dropdown.
  * @param onNameChanged Called on every change to the name field.
  * @param onSaveClick Called when the user taps Save.
- * @param onClose Called on Cancel and Done.
+ * @param onClose Called on back, Cancel and Done.
  */
 @Composable
 fun AddDocumentScreen(
@@ -73,44 +87,49 @@ fun AddDocumentScreen(
     val pickPhoto = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val pickFile = { filePicker.launch(ACCEPTED_MIME_TYPES) }
 
-    Scaffold { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(text = stringResource(R.string.add_title), style = MaterialTheme.typography.headlineSmall)
-            when (uiState.stage) {
-                AddStage.CHOOSING -> ChooseFileSection(pickPhoto, pickFile, onClose)
-                AddStage.READING -> ProgressSection(R.string.add_reading)
-                AddStage.READY -> ReadySection(uiState, onTypeChosen, onNameChanged, onSaveClick, pickFile, onClose)
-                AddStage.SAVING -> ProgressSection(R.string.add_saving)
-                AddStage.SAVED -> SavedSection(onClose)
-            }
-            ErrorMessage(uiState.errorMessage)
+    ScreenScaffold(topBar = { AddDocumentTopBar(onBack = onClose) }) {
+        when (uiState.stage) {
+            AddStage.CHOOSING -> ChooseFileSection(pickPhoto, pickFile)
+            AddStage.READING -> LoadingState(text = stringResource(R.string.add_reading))
+            AddStage.READY -> ReadySection(uiState, onTypeChosen, onNameChanged, onSaveClick, pickFile, onClose)
+            AddStage.SAVING -> LoadingState(text = stringResource(R.string.add_saving))
+            AddStage.SAVED -> SavedSection(onDone = onClose)
+        }
+        val errorMessage = uiState.errorMessage
+        if (errorMessage != null) {
+            MessageBanner(text = stringResource(errorMessage), kind = BannerKind.ERROR)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChooseFileSection(onPickPhoto: () -> Unit, onPickFile: () -> Unit, onClose: () -> Unit) {
-    Text(text = stringResource(R.string.add_intro), style = MaterialTheme.typography.bodyLarge)
-    Button(onClick = onPickPhoto, modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.add_choose_photo))
-    }
-    OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.add_choose_file))
-    }
-    TextButton(onClick = onClose) {
-        Text(text = stringResource(R.string.add_cancel))
-    }
+private fun AddDocumentTopBar(onBack: () -> Unit) {
+    // TopAppBar pads itself for the status bar, so the title is never hidden behind it.
+    TopAppBar(
+        title = { Text(text = stringResource(R.string.add_title), style = MaterialTheme.typography.titleLarge) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(painter = painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.back))
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+    )
 }
 
 @Composable
-private fun ReadySection(
+private fun ChooseFileSection(onPickPhoto: () -> Unit, onPickFile: () -> Unit) {
+    Text(
+        text = stringResource(R.string.add_intro),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    PrimaryButton(text = stringResource(R.string.add_choose_photo), onClick = onPickPhoto, icon = R.drawable.ic_image)
+    SecondaryButton(text = stringResource(R.string.add_choose_file), onClick = onPickFile, icon = R.drawable.ic_picture_as_pdf)
+}
+
+@Composable
+private fun ColumnScope.ReadySection(
     uiState: AddDocumentUiState,
     onTypeChosen: (DocumentType) -> Unit,
     onNameChanged: (String) -> Unit,
@@ -118,40 +137,58 @@ private fun ReadySection(
     onPickOtherFile: () -> Unit,
     onClose: () -> Unit,
 ) {
-    PreviewSection(uiState)
+    PreviewCard(uiState)
     TypeDropdown(selected = uiState.documentType, onTypeChosen = onTypeChosen)
     NameField(uiState, onNameChanged)
-    Button(onClick = onSaveClick, enabled = uiState.canSave, modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.add_save_button))
-    }
-    OutlinedButton(onClick = onPickOtherFile, modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.add_choose_other_file))
-    }
-    TextButton(onClick = onClose) {
-        Text(text = stringResource(R.string.add_cancel))
+    PrimaryButton(
+        text = stringResource(R.string.add_save_button),
+        onClick = onSaveClick,
+        enabled = uiState.canSave,
+        icon = R.drawable.ic_lock,
+    )
+    SecondaryButton(text = stringResource(R.string.add_choose_other_file), onClick = onPickOtherFile)
+    QuietButton(text = stringResource(R.string.add_cancel), onClick = onClose, modifier = Modifier.align(Alignment.CenterHorizontally))
+}
+
+/** The picked file inside a quiet bordered card, so photos of any colour sit calmly on the page. */
+@Composable
+private fun PreviewCard(uiState: AddDocumentUiState) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(Dimens.BorderWidth, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(modifier = Modifier.padding(Dimens.SpaceM), contentAlignment = Alignment.Center) {
+            val preview = uiState.preview
+            if (preview != null) {
+                Image(
+                    bitmap = preview.asImageBitmap(),
+                    contentDescription = stringResource(R.string.add_preview_description),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = PreviewMaxHeight),
+                )
+            } else if (uiState.isPdf) {
+                PdfWithoutPreview()
+            }
+        }
     }
 }
 
 @Composable
-private fun PreviewSection(uiState: AddDocumentUiState) {
-    val preview = uiState.preview
-    if (preview != null) {
-        Image(
-            bitmap = preview.asImageBitmap(),
-            contentDescription = stringResource(R.string.add_preview_description),
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+private fun PdfWithoutPreview() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpaceXl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.SpaceM),
+    ) {
+        HeroIcon(icon = R.drawable.ic_picture_as_pdf)
+        Text(
+            text = stringResource(R.string.add_preview_unavailable),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
-        return
-    }
-    if (uiState.isPdf) {
-        Box(
-            modifier = Modifier.size(96.dp).background(MaterialTheme.colorScheme.secondaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = stringResource(R.string.add_pdf_badge), style = MaterialTheme.typography.titleLarge)
-        }
-        Text(text = stringResource(R.string.add_preview_unavailable), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -160,6 +197,10 @@ private fun PreviewSection(uiState: AddDocumentUiState) {
 private fun TypeDropdown(selected: DocumentType?, onTypeChosen: (DocumentType) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val selectedLabel = if (selected != null) stringResource(labelFor(selected)) else ""
+    // The chosen type's badge sits in the field; before a choice there is no badge.
+    val selectedBadge: (@Composable () -> Unit)? = selected?.let { type ->
+        { TypeBadge(type = type, modifier = Modifier.padding(start = Dimens.SpaceS)) }
+    }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { isOpen -> expanded = isOpen }) {
         OutlinedTextField(
             value = selectedLabel,
@@ -167,7 +208,9 @@ private fun TypeDropdown(selected: DocumentType?, onTypeChosen: (DocumentType) -
             readOnly = true,
             label = { Text(text = stringResource(R.string.add_type_label)) },
             placeholder = { Text(text = stringResource(R.string.add_type_placeholder)) },
+            leadingIcon = selectedBadge,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = MaterialTheme.shapes.medium,
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
@@ -175,7 +218,8 @@ private fun TypeDropdown(selected: DocumentType?, onTypeChosen: (DocumentType) -
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             for (type in DocumentType.entries) {
                 DropdownMenuItem(
-                    text = { Text(text = stringResource(labelFor(type))) },
+                    text = { Text(text = stringResource(labelFor(type)), style = MaterialTheme.typography.bodyLarge) },
+                    leadingIcon = { TypeBadge(type = type) },
                     onClick = {
                         onTypeChosen(type)
                         expanded = false
@@ -199,37 +243,32 @@ private fun NameField(uiState: AddDocumentUiState, onNameChanged: (String) -> Un
         supportingText = {
             if (visibleProblem != null) Text(text = stringResource(visibleProblem.message))
         },
+        shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth(),
     )
 }
 
 @Composable
-private fun ProgressSection(messageRes: Int) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        CircularProgressIndicator()
-        Text(text = stringResource(messageRes), style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@Composable
 private fun SavedSection(onDone: () -> Unit) {
-    Text(text = stringResource(R.string.add_saved_note), style = MaterialTheme.typography.bodyLarge)
-    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.add_done))
+    val view = LocalView.current
+    LaunchedEffect(Unit) { performConfirmHaptic(view) }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpaceXl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
+    ) {
+        HeroIcon(
+            icon = R.drawable.ic_check_circle,
+            tint = MaterialTheme.colorScheme.tertiary,
+            container = MaterialTheme.colorScheme.tertiaryContainer,
+        )
+        Text(text = stringResource(R.string.add_saved_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            text = stringResource(R.string.add_saved_note),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
-}
-
-@Composable
-private fun ErrorMessage(messageRes: Int?) {
-    if (messageRes == null) return
-    Text(
-        text = stringResource(messageRes),
-        color = MaterialTheme.colorScheme.error,
-        style = MaterialTheme.typography.bodyMedium,
-        textAlign = TextAlign.Start,
-    )
+    PrimaryButton(text = stringResource(R.string.add_done), onClick = onDone)
 }

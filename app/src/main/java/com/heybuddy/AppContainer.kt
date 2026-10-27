@@ -11,6 +11,7 @@ import com.heybuddy.security.FileCrypto
 import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
 import com.heybuddy.security.VaultLockState
+import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
 import com.heybuddy.util.VAULT_DATABASE_NAME
@@ -66,6 +67,9 @@ class AppContainer(private val appContext: Context) {
     /** The only class screens use for documents. */
     val vaultRepository: VaultRepository =
         VaultRepository(databaseHolder, vaultLockState, keyWrapper, fileCrypto)
+
+    /** Which vault screen is showing; back to home on every lock and unlock (memory only). */
+    val vaultNavigator: VaultNavigator = VaultNavigator(vaultLockState)
 
     /** Saves picked files into the vault. */
     val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository, ::freeSpaceForVault)

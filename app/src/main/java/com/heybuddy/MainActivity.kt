@@ -5,12 +5,23 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,14 +29,21 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.heybuddy.ui.TopScreen
+import com.heybuddy.ui.VaultScreen
 import com.heybuddy.ui.adddocument.AddDocumentScreen
 import com.heybuddy.ui.adddocument.AddDocumentViewModel
 import com.heybuddy.ui.chooseTopScreen
 import com.heybuddy.ui.theme.HeyBuddyTheme
+import com.heybuddy.ui.theme.LocalReduceMotion
+import com.heybuddy.ui.theme.MotionDurations
+import com.heybuddy.ui.theme.motionDelayMillis
+import com.heybuddy.ui.theme.motionSpec
+import com.heybuddy.ui.theme.performConfirmHaptic
 import com.heybuddy.ui.vault.VaultHomePlaceholder
 import com.heybuddy.ui.unlock.NoScreenLockScreen
 import com.heybuddy.ui.unlock.UnlockScreen
 import com.heybuddy.ui.unlock.UnlockViewModel
+import kotlinx.coroutines.delay
 
 /**
  * The app's single activity. A FragmentActivity because BiometricPrompt needs one.
@@ -34,6 +52,8 @@ import com.heybuddy.ui.unlock.UnlockViewModel
 class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Draw behind the system bars; ScreenScaffold keeps content clear of them (spec 5.14).
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val container = (application as HeyBuddyApp).container
         setContent {
@@ -56,37 +76,88 @@ private fun AppRoot(container: AppContainer, activity: FragmentActivity) {
         onPauseOrDispose {}
     }
 
-    when (chooseTopScreen(isDeviceSecure, lockStatus)) {
-        TopScreen.NO_SCREEN_LOCK -> NoScreenLockScreen()
-        TopScreen.UNLOCK -> UnlockRoute(container = container, activity = activity)
-        TopScreen.VAULT -> VaultRoute(container = container, activity = activity)
+    val targetScreen = chooseTopScreen(isDeviceSecure, lockStatus)
+    var shownScreen by remember { mutableStateOf(targetScreen) }
+    var unlockSucceeded by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    val unlockCelebrationMillis = motionDelayMillis(MotionDurations.UNLOCK_SUCCESS_MILLIS)
+
+    LaunchedEffect(targetScreen) {
+        val isUnlocking = shownScreen == TopScreen.UNLOCK && targetScreen == TopScreen.VAULT
+        if (isUnlocking) {
+            // Let the lock visibly open (with a light tap) before the vault appears.
+            unlockSucceeded = true
+            performConfirmHaptic(view)
+            delay(unlockCelebrationMillis)
+        }
+        unlockSucceeded = false
+        shownScreen = targetScreen
+    }
+
+    val reduceMotion = LocalReduceMotion.current
+    AnimatedContent(
+        targetState = shownScreen,
+        transitionSpec = { topScreenTransition(targetState, reduceMotion) },
+        label = "topScreen",
+    ) { screen ->
+        when (screen) {
+            TopScreen.NO_SCREEN_LOCK -> NoScreenLockScreen()
+            TopScreen.UNLOCK -> UnlockRoute(container = container, activity = activity, unlockSucceeded = unlockSucceeded)
+            TopScreen.VAULT -> VaultRoute(container = container, activity = activity)
+        }
     }
 }
 
-/** Screens inside the unlocked vault. Navigation Compose replaces this in Task 1.8. */
-private enum class VaultScreen {
-    HOME,
-    ADD_DOCUMENT,
+/**
+ * Opening the vault fades in gently. Locking is INSTANT: vault content must never stay on screen,
+ * not even for a fade, once the vault is locked.
+ */
+private fun topScreenTransition(target: TopScreen, reduceMotion: Boolean): ContentTransform {
+    if (target != TopScreen.VAULT) {
+        return EnterTransition.None togetherWith ExitTransition.None
+    }
+    return fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) togetherWith
+        fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
 }
+
+/** Moving between vault screens: a short fade with a slight upward slide (spec 5.14). */
+private fun vaultScreenTransition(reduceMotion: Boolean): ContentTransform {
+    val enter = fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) +
+        slideInVertically(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) { height -> height / SLIDE_FRACTION }
+    val exit = fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
+    return enter togetherWith exit
+}
+
+/** Screens slide in from 1/24 of their height below: enough to feel smooth, small enough to stay calm. */
+private const val SLIDE_FRACTION = 24
 
 @Composable
 private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
-    // Not saved across a lock: this route leaves the screen on lock, so unlock starts at HOME.
-    var screen by rememberSaveable { mutableStateOf(VaultScreen.HOME) }
-    when (screen) {
-        VaultScreen.HOME -> {
-            val documents by remember { container.vaultRepository.observeDocuments() }
-                .collectAsStateWithLifecycle(initialValue = emptyList())
-            VaultHomePlaceholder(
-                documentCount = documents.size,
-                onAddDocument = { screen = VaultScreen.ADD_DOCUMENT },
+    // The current screen comes from VaultNavigator (memory only), never from saved screen state:
+    // after any unlock, even one following the phone closing the app, the vault opens at HOME.
+    val navigator = container.vaultNavigator
+    val screen by navigator.screen.collectAsStateWithLifecycle()
+    val reduceMotion = LocalReduceMotion.current
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = { vaultScreenTransition(reduceMotion) },
+        label = "vaultScreen",
+    ) { shown ->
+        when (shown) {
+            VaultScreen.HOME -> {
+                val documents by remember { container.vaultRepository.observeDocuments() }
+                    .collectAsStateWithLifecycle(initialValue = emptyList())
+                VaultHomePlaceholder(
+                    documentCount = documents.size,
+                    onAddDocument = { navigator.open(VaultScreen.ADD_DOCUMENT) },
+                )
+            }
+            VaultScreen.ADD_DOCUMENT -> AddDocumentRoute(
+                container = container,
+                activity = activity,
+                onClose = { navigator.backToHome() },
             )
         }
-        VaultScreen.ADD_DOCUMENT -> AddDocumentRoute(
-            container = container,
-            activity = activity,
-            onClose = { screen = VaultScreen.HOME },
-        )
     }
 }
 
@@ -121,7 +192,7 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
 }
 
 @Composable
-private fun UnlockRoute(container: AppContainer, activity: FragmentActivity) {
+private fun UnlockRoute(container: AppContainer, activity: FragmentActivity, unlockSucceeded: Boolean) {
     val unlockViewModel: UnlockViewModel = viewModel(
         factory = viewModelFactory {
             initializer { UnlockViewModel(container.biometricUnlocker) }
@@ -136,6 +207,7 @@ private fun UnlockRoute(container: AppContainer, activity: FragmentActivity) {
 
     UnlockScreen(
         uiState = uiState,
+        unlockSucceeded = unlockSucceeded,
         onUnlockClick = { unlockViewModel.onUnlockClicked(activity) },
     )
 }
