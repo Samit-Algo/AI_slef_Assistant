@@ -20,6 +20,9 @@ import com.heybuddy.settings.DeleteEverythingFlow
 import com.heybuddy.settings.SharedPreferencesStore
 import com.heybuddy.ui.AutoLockController
 import com.heybuddy.ui.VaultNavigator
+import com.heybuddy.ocr.DocumentPageReader
+import com.heybuddy.ocr.MlKitTextReader
+import com.heybuddy.ocr.ReadingSession
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.ui.adddocument.PagePreparer
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
@@ -136,6 +139,12 @@ class AppContainer(private val appContext: Context) {
 
     /** Saves pending pages as a new document, or adds them to an existing one. */
     val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository)
+
+    /** Reading results of this unlocked session; cleared on every lock (spec 7.3-2). */
+    val readingSession: ReadingSession = ReadingSession(vaultLockState)
+
+    /** Reads vault pages on the phone (ML Kit; the engine starts on first use). */
+    val documentPageReader: DocumentPageReader = DocumentPageReader(vaultRepository, MlKitTextReader(), readingSession)
 
     // For app-wide background work that must not depend on any screen (orphan cleanup).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

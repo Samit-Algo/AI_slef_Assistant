@@ -33,6 +33,8 @@ enum class LogEvent(val message: String) {
     DOCUMENT_SAVE_ROLLED_BACK("Document save failed; its pages were put back as not saved"),
     PAGES_ADDED("Pages added to a document"),
     PAGE_REMOVED("Page removed from a document"),
+    PAGE_READ("Page read on the phone (line count only)"),
+    READING_RESULTS_CLEARED("Reading results cleared"),
     DOCUMENT_RENAMED("Document renamed"),
     DOCUMENT_DELETED("Document deleted"),
     MASTER_KEY_GONE("Master key is gone for good; showing the recovery screen"),

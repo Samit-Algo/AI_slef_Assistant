@@ -71,6 +71,9 @@ android {
     sourceSets {
         // The migration test (Task 1.10p) builds a version-1 database from app/schemas/.../1.json.
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        // Test helpers used by both the computer tests and the phone tests (Task 2.2: OCR accuracy maths).
+        getByName("test").kotlin.srcDir("src/sharedTest/java")
+        getByName("androidTest").kotlin.srcDir("src/sharedTest/java")
     }
 
     lint {

@@ -20,7 +20,7 @@ room = "2.8.5"
 profileinstaller = "1.4.1"
 sqlcipher = "4.19.1"
 ksp = "2.3.12"
-# Owner OK (Phase 2): on-device text recognition, Devanagari + Latin, models BUNDLED in the app
+# Owner OK (Phase 2): on-device text recognition, Devanagari + English, models BUNDLED in the app
 # (never downloaded). Its network/logging parts are stripped in AndroidManifest.xml.
 mlkitTextRecognitionDevanagari = "16.0.1"
 junit = "4.13.2"

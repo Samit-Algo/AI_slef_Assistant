@@ -143,3 +143,12 @@ const val PAGE_ASSOCIATED_DATA_INFIX: String = ":page:"
  * MAX_PAGES_PER_DOCUMENT of them stay in memory at once (about 0.6 MB each at most).
  */
 const val THUMBNAIL_MAX_PIXELS: Int = 384
+
+/**
+ * Long side, in pixels, of a page picture handed to OCR (Task 2.2). A card photo at this size has
+ * letters well above ML Kit's suggested 16 pixels, while reading stays quick and memory small.
+ */
+const val READING_LONG_SIDE_PIXELS: Int = 2048
+
+/** Most pages of one PDF page-file that are read for details (a certificate rarely has more). */
+const val MAX_PDF_PAGES_TO_READ: Int = 5

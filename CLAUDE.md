@@ -37,6 +37,7 @@
 - Dependency injection is manual (`AppContainer`), no Hilt/Dagger.
 - Never log personal data (file names, document names, contents). Use `SafeLog`.
 - Hey Buddy suggests and fills, but **never acts alone** — the user always presses Submit.
+- Never process identity document images from the internet or from unknown people. Test only with generated SAMPLE documents or the owner's own documents.
 
 ## Owner preferences
 
