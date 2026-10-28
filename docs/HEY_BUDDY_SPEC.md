@@ -52,7 +52,7 @@ The user always reviews the values and presses Submit themselves.
 | Phase | What we build | Done when… |
 | --- | --- | --- |
 | **1. Secure vault** — **Done, with checks deferred to Phase 7** (owner decision, 2026-10-28; see section 8) | Add, view, delete documents; encryption; biometric lock; no internet | Files are unreadable off the phone; app locks itself |
-| 2. Document reader — detailed spec **APPROVED** in section 7 (2026-10-28) | Camera capture, OCR, document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs |
+| 2. Document reader — detailed spec **APPROVED** in section 7 (2026-10-28) | Camera capture, OCR (English, Hindi and **Tamil**), document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs, including Tamil ones |
 | 3. Autofill (text) | Autofill service + rules matcher + "Fill all" + review screen | Fills a test form in an app and in Chrome |
 | 4. File uploads | Documents provider (appears in file pickers), photo resize. **Note:** photos can contain hidden details such as GPS location (EXIF). Strip this hidden data before any file is uploaded to a website. **Note (owner decision, Task 1.10p):** multi-page documents store each page as its own encrypted file (not one combined PDF), so a website can get front and back as separate uploads, or Phase 4 builds a combined PDF on the fly only when a website asks for one | Uploads photo + PDF on a real government portal |
 | 5. On-device AI | AI matcher for unknown fields, confidence, site memory | Unusual labels filled correctly; unsure fields left empty |
@@ -448,9 +448,13 @@ Planned set: the 8 type icons above, plus `lock`, `lock_open`, `fingerprint`, `a
 
 ### 7.1 Goal in one sentence
 
-Hey Buddy reads the user's own documents on the phone (camera or vault), finds the important facts
-(name, date of birth, PAN, Aadhaar, address), and saves **only the facts the user has checked and
-confirmed**, linked to the page they came from, without ever going online.
+Hey Buddy reads the user's own documents on the phone (camera or vault) in **English, Hindi and
+Tamil**, finds the important facts (name, date of birth, PAN, Aadhaar, address), and saves **only
+the facts the user has checked and confirmed**, linked to the page they came from, without ever
+going online.
+
+**Tamil is a REQUIRED feature of Phase 2 (owner decision, 2026-10-28)**, not optional: Tamil Nadu
+documents and certificates must be readable.
 
 ### 7.2 Simple picture
 
@@ -458,7 +462,9 @@ confirmed**, linked to the page they came from, without ever going online.
  Camera (in-app)  or  a page already in the vault
             │  image only in memory
             ▼
-   OCR on the phone (ML Kit, bundled models)  →  text only in memory, never saved
+   OCR on the phone, both engines bundled, text only in memory, never saved:
+     ML Kit  → English + Hindi        Tamil engine (Task 2.3) → Tamil
+            └──── merged per page through the TextReader interface ────┘
             ▼
    Document type guess  →  fact rules (PAN, Aadhaar + Verhoeff, dates, name, address)
             ▼
@@ -474,7 +480,8 @@ confirmed**, linked to the page they came from, without ever going online.
    (`transport-backend-cct`, `transport-runtime`); they ask for INTERNET and ACCESS_NETWORK_STATE.
    Both permissions and the logging job and receiver are removed from the manifest, so nothing
    can be sent. A phone test checks that the installed app holds no network permission and that
-   only the launcher activity is exported.
+   only the launcher activity is exported. **The Tamil engine (Task 2.3) must meet the same rule:**
+   bundled models, fully offline, no download and no network part.
 2. **Images and OCR text live only in memory.** No photo is ever written to disk or to the gallery
    unencrypted; a captured photo becomes a pending page (the Task 1.10p encrypted pipeline).
    OCR text is never saved and never logged; it is dropped when the confirm screen closes, on
@@ -499,6 +506,32 @@ confirmed**, linked to the page they came from, without ever going online.
 | Brought along | Google Play services base and tasks, ML Kit common, Firebase components, Google data-transport (the usage logging blocked by rule 7.3-1) |
 | Internet needed? | **No.** Recognition is on the phone; there is no model download; the only network part (usage logging) cannot send anything, because the app holds no internet permission and those parts are removed |
 
+### 7.4a Tamil reading engine (Task 2.3, chosen by measurement)
+
+ML Kit has no Tamil recognizer, so Tamil needs a second, fully offline engine with its models
+inside the app. The engine is **picked by measurement, not by guess**, comparing:
+
+| | (a) Tesseract (for example Tesseract4Android) + Tamil model `tam` | (b) PaddleOCR Tamil recognition model on ONNX Runtime Mobile |
+| --- | --- | --- |
+| What it is | Classic open-source OCR engine with a trained Tamil language file | Small neural text detector + Tamil recognizer, run by Microsoft's ONNX Runtime |
+| Expected licences (to confirm in 2.3) | Apache 2.0 (engine and `tessdata` models) | Apache 2.0 (PaddleOCR models) + MIT (ONNX Runtime) |
+
+**Measured on made-up sample Tamil documents only** (never real ones):
+1. a Tamil Nadu style certificate (printed, form layout),
+2. a Tamil name and address block,
+3. a phone photo of a sample with a slight angle and a shadow.
+
+**Measured for each engine:** character accuracy (against the known sample text), speed per page on
+the owner's phone, app size increase, licence, and that it needs **no internet at all** (installed
+app holds no network permission; works in airplane mode). Results go in a table with a
+recommendation, and **the owner is asked before either library is added**. The measuring code for
+the engine that is not chosen is removed again.
+
+**Merging:** both engines sit behind the `TextReader` interface (Task 2.2). For each page, ML Kit's
+lines (English, Hindi) and the Tamil engine's lines (Tamil script) are merged into one list in
+reading order; where both read the same spot, the line in that spot's script wins (Tamil letters →
+Tamil engine; otherwise ML Kit).
+
 ### 7.5 Camera: in-app CameraX (recommended) vs the system camera app
 
 | | (a) CameraX inside Hey Buddy — **recommended** | (b) The phone's own camera app |
@@ -521,6 +554,15 @@ A pure Kotlin function scores the text for each type and suggests the best one; 
 - **PAN:** "Income Tax Department" / "आयकर विभाग", "Permanent Account Number", plus a valid PAN (7.7).
 - **Passport:** "Republic of India", "Passport", or a machine-readable line starting `P<IND`.
 - **Driving licence:** "Driving Licence", "DL No", "Transport Department", "Union of India".
+- Tamil words count too, for example "இந்திய அரசு" (Government of India), "தமிழ்நாடு அரசு"
+  (Government of Tamil Nadu), "சான்றிதழ்" (certificate).
+- **Tamil Nadu certificates (owner decision, 2026-10-28) are target document types of Phase 2:**
+  community certificate (சாதிச் சான்றிதழ்), income certificate (வருமானச் சான்றிதழ்), nativity
+  certificate (இருப்பிடச் சான்றிதழ்), and school / transfer certificate (மாற்றுச் சான்றிதழ்). They
+  are added to the document type list in **Task 2.11**, with a database version step and a real,
+  tested migration. (The type is stored as its name in text, so the new values may need no table
+  change; the task still raises the version with a real migration and a migration test, so older
+  data is checked and stays valid.)
 - Otherwise **Other**. A weak score means no suggestion (the user picks).
 
 ### 7.7 Fact extraction rules (rules first, no AI yet)
@@ -537,8 +579,10 @@ Every rule is a small pure function with computer tests on made-up sample text (
 | **Gender** | "MALE" / "FEMALE" / "TRANSGENDER", or "पुरुष" / "महिला" |
 | **Address** | Aadhaar back: the text after "Address:" / "पता:" up to and including the PIN code, lines joined |
 | **PIN code** | 6 digits, first digit 1–9, normally at the end of the address |
+| **Tamil labels** | Every label rule also knows the Tamil label: **பெயர்** (name), **தந்தை பெயர்** (father's name), **பிறந்த தேதி** (date of birth), **முகவரி** (address), **பாலினம்** (gender), with Tamil gender words **ஆண்** (male), **பெண்** (female), **மூன்றாம் பாலினம்** (third gender) |
+| **Tamil dates** | Dates with Tamil month names are understood: ஜனவரி, பிப்ரவரி, மார்ச், ஏப்ரல், மே, ஜூன், ஜூலை, ஆகஸ்ட், செப்டம்பர், அக்டோபர், நவம்பர், டிசம்பர் (for example "15 ஆகஸ்ட் 1990"). Tamil digits (௦–௯), if printed, are read as 0–9. Traditional Tamil calendar months (சித்திரை …) belong to a different calendar and are never converted; such a date is left for the user |
 
-### 7.8 Aadhaar Secure QR (separate, later task: 2.10)
+### 7.8 Aadhaar Secure QR (separate, later task: 2.12)
 
 Yes, it can be read **and verified fully offline**. The QR on Aadhaar cards and e-Aadhaar (since
 2019) holds a very large number: turned into bytes and unzipped, it gives the details (reference
@@ -569,6 +613,11 @@ Barcode Scanning (bundled; 4.7 MB engine on 64-bit phones, same usage-logging pa
 confirmed fact (Aadhaar always masked), with its source ("Aadhaar card, page 1" or "page deleted"),
 and lets the user edit or delete each one.
 
+**Typed Tamil fields (owner decision, 2026-10-28):** "My details" always offers **Name in Tamil**,
+**Father's name in Tamil** and **Address in Tamil**, which the user can type (or correct) by hand,
+so Tamil works even when a photo is hard to read. Typed values are stored with origin `TYPED` and
+need no source page.
+
 ### 7.10 Data model: profile facts (database version 3, real migration)
 
 New table `profile_facts`:
@@ -576,12 +625,12 @@ New table `profile_facts`:
 | Column | Type | Notes |
 | --- | --- | --- |
 | `factId` | String (UUID) | Primary key |
-| `kind` | String (`FactKind`) | `FULL_NAME`, `FATHER_NAME`, `DATE_OF_BIRTH`, `YEAR_OF_BIRTH`, `GENDER`, `PAN`, `AADHAAR_LAST4`, `AADHAAR_FULL`, `ADDRESS`, `PIN_CODE` |
+| `kind` | String (`FactKind`) | `FULL_NAME`, `FATHER_NAME`, `DATE_OF_BIRTH`, `YEAR_OF_BIRTH`, `GENDER`, `PAN`, `AADHAAR_LAST4`, `AADHAAR_FULL`, `ADDRESS`, `PIN_CODE`, and the Tamil fields `FULL_NAME_TAMIL`, `FATHER_NAME_TAMIL`, `ADDRESS_TAMIL` |
 | `value` | String | As confirmed by the user (dates stored as `YYYY-MM-DD`) |
-| `documentId` | String, nullable | The source document (foreign key, set to null if the user keeps the fact when the document is deleted) |
+| `documentId` | String, nullable | The source document (null for facts the user typed in "My details") (foreign key, set to null if the user keeps the fact when the document is deleted) |
 | `pageId` | String, nullable | The page it came from (foreign key to `document_pages`, set to null if the user keeps the fact when the page is deleted) |
 | `sourceDeletedAt` | Long, nullable | Set when the source page/document was deleted but the user kept the fact; shown as "page deleted" |
-| `origin` | String | `OCR`, `QR_VERIFIED` (Task 2.10) or `TYPED` (the user corrected it) |
+| `origin` | String | `OCR`, `QR_VERIFIED` (Task 2.12) or `TYPED` (the user corrected it) |
 | `confirmedAt` / `updatedAt` | Long (epoch ms) | |
 
 - Index on `documentId` and on `pageId`.
@@ -602,7 +651,8 @@ New table `profile_facts`:
 | 1 | `com.google.mlkit:text-recognition-devanagari` (bundled) — **APPROVED** | 16.0.1 | ML Kit Terms (free, closed source) | Hindi + English OCR on the phone |
 | 2 | `com.google.mlkit:text-recognition` (bundled, Latin) — **ask the owner at Task 2.2**, only if it reads English clearly better | 16.0.1 | ML Kit Terms | Better English OCR |
 | 3 | `androidx.camera:camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-compose` — **APPROVED** | 1.6.2 | Apache 2.0 | In-app camera, photo straight to memory |
-| 4 | `com.google.zxing:core` — **ask the owner at Task 2.10** | latest stable at that time | Apache 2.0 | Reading the Aadhaar Secure QR offline |
+| 4 | Tamil engine: Tesseract4Android + `tam` model, **or** PaddleOCR Tamil model + ONNX Runtime Mobile — **chosen by measurement in Task 2.3; ask the owner before adding** | latest stable at that time | Apache 2.0 / Apache 2.0 + MIT (to confirm) | Tamil reading, fully offline |
+| 5 | `com.google.zxing:core` — **ask the owner at Task 2.12** | latest stable at that time | Apache 2.0 | Reading the Aadhaar Secure QR offline |
 
 Libraries 1 and 2 bring along Google Play services base/basement/tasks, ML Kit common and vision
 common, Firebase components and encoders, and Google data-transport (blocked, see 7.3-1).
@@ -615,26 +665,31 @@ permission.
 | Task | What | Done when |
 | --- | --- | --- |
 | **2.1 OCR library and privacy guard** | Add the bundled ML Kit recognizer; remove ACCESS_NETWORK_STATE and the data-transport job/receiver from the manifest; keep only `arm64-v8a` and `armeabi-v7a`; phone test: installed app has no network permission, only the launcher is exported; Licences screen shows ML Kit's third-party licences; report the real size added | Test passes; app size growth reported; airplane-mode check by the owner |
-| **2.2 Text reader** | `TextReader`: reads one page (photo bytes in memory, or a PDF page drawn with PdfRenderer) and returns lines with their positions; memory only; wiped after use; never logged. Phone tests on made-up sample images (rendered English and Hindi text). Compare Devanagari-only vs adding Latin on the same samples | Sample text read correctly; decision on library 2 |
-| **2.3 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera |
-| **2.4 Document type guess** | Pure rules (7.6) + computer tests | Each sample type guessed; unknown stays Other |
-| **2.5 Facts part 1: numbers and dates** | PAN rule, Aadhaar rule with Verhoeff, VID/enrolment/masked exclusion, date rules (7.7) + computer tests (including OCR mix-ups) | All rule tests pass |
-| **2.6 Facts part 2: name, gender, address** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts + computer tests on made-up samples | All rule tests pass |
-| **2.7 Profile facts storage** | Table, `FactKind`, migration 2 → 3 with test, repository (save confirmed facts, list, edit, delete), Aadhaar storage rule (7.3-4), the delete-source rule (7.10: "Also delete the N details…?" in the page and document delete dialogs, Yes by default; No keeps them as "page deleted") | Migration test passes; old vault still opens; both delete choices tested |
-| **2.8 Confirm screen** | 7.9, with masked Aadhaar and the "full number" tick box; Save stores only kept facts; lock/cancel discard everything | Nothing unconfirmed stored (test); manual test |
-| **2.9 Entry points and "My details" tab** | "Read details" after saving a document and in the viewer menu; the vault screen gets two tabs, **"Documents | My details"** (design system and motion of 5.14); "My details" lists facts with their source (or "page deleted"), masked Aadhaar, edit, delete | Owner reads a sample Aadhaar and PAN end to end |
-| **2.10 Aadhaar Secure QR (later)** | 7.8: scan, decode, verify the UIDAI signature offline, mark facts verified | Signed QR verified; tampered QR rejected |
-| **2.11 Phase 2 review** | All tests, a short Phase 2 report, size and privacy summary | Owner approves |
+| **2.2 Text reader** | `TextReader` (an interface, so the Tamil engine of 2.3 plugs in next to ML Kit): reads one page (photo bytes in memory, or a PDF page drawn with PdfRenderer) and returns lines with their positions; memory only; wiped after use; never logged. Phone tests on made-up sample images (rendered English and Hindi text). Compare Devanagari-only vs adding Latin on the same samples | Sample text read correctly; decision on library 2 |
+| **2.3 Tamil reading engine** | Compare (a) Tesseract + `tam` and (b) PaddleOCR Tamil + ONNX Runtime Mobile on three made-up Tamil samples (7.4a): character accuracy, speed on the owner's phone, size, licence, no internet. Table + recommendation; **ask the owner before adding either library**; then build the chosen engine behind `TextReader` and merge its Tamil lines with ML Kit's per page | Owner picks the engine from the measured table; Tamil sample text read with the measured accuracy; still no network permission |
+| **2.4 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera |
+| **2.5 Document type guess** | Pure rules (7.6) + computer tests | Each sample type guessed; unknown stays Other |
+| **2.6 Facts part 1: numbers and dates (including Tamil month names)** | PAN rule, Aadhaar rule with Verhoeff, VID/enrolment/masked exclusion, date rules with Tamil month names and Tamil digits (7.7) + computer tests (including OCR mix-ups) | All rule tests pass |
+| **2.7 Facts part 2: name, gender, address (English, Hindi and Tamil labels)** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts, Tamil labels (7.7), Tamil-script names and addresses + computer tests on made-up samples | All rule tests pass |
+| **2.8 Profile facts storage** | Table, `FactKind`, migration 2 → 3 with test, repository (save confirmed facts, list, edit, delete), Aadhaar storage rule (7.3-4), the delete-source rule (7.10: "Also delete the N details…?" in the page and document delete dialogs, Yes by default; No keeps them as "page deleted") | Migration test passes; old vault still opens; both delete choices tested |
+| **2.9 Confirm screen** | 7.9, with masked Aadhaar and the "full number" tick box; Save stores only kept facts; lock/cancel discard everything | Nothing unconfirmed stored (test); manual test |
+| **2.10 Entry points and "My details" tab** | "Read details" after saving a document and in the viewer menu; the vault screen gets two tabs, **"Documents | My details"** (design system and motion of 5.14); "My details" lists facts with their source (or "page deleted"), masked Aadhaar, edit, delete; the typed Tamil fields (Name, Father's name, Address in Tamil) | Owner reads a sample Aadhaar, PAN and a Tamil sample end to end; typed Tamil fields saved |
+| **2.11 Tamil Nadu certificate types** | Add community, income, nativity and school/transfer certificate to the document types (labels, colours and icons from the design system), with a database version step, a real migration and a migration test; detection rules (7.6) for them | Types selectable and detected on samples; migration test passes; old vault opens |
+| **2.12 Aadhaar Secure QR (later)** | 7.8: scan, decode, verify the UIDAI signature offline, mark facts verified | Signed QR verified; tampered QR rejected |
+| **2.13 Phase 2 review** | All tests, a short Phase 2 report, size and privacy summary | Owner approves |
 
 ### 7.13 Owner decisions (2026-10-28)
 
 1. Libraries: ML Kit Devanagari 16.0.1 and CameraX 1.6.2 approved now; ML Kit Latin only if Task 2.2
-   shows it reads English clearly better (ask then); ZXing at Task 2.10 (ask then). ML Kit
+   shows it reads English clearly better (ask then); ZXing at Task 2.12 (ask then). ML Kit
    network/logging parts stay stripped, proven by a phone test.
 2. Camera: CameraX inside the app, capture to memory only.
 3. Deleting a source page/document asks "Also delete the N details read from this page?" (Yes by
    default); No keeps the facts marked "page deleted" (7.10).
 4. "My details" is a separate tab on the vault screen: "Documents | My details".
+5. **Tamil is required** (later the same day): a Tamil reading engine chosen by measurement in
+   Task 2.3 (ask before adding it), Tamil labels and month names in the fact rules, typed Tamil
+   fields in "My details", and Tamil Nadu certificates as document types (Task 2.11, with a migration).
 
 ## 8. PHASE 7 — Before first real user (checks deferred from Phase 1)
 
