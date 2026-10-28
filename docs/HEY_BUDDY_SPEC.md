@@ -51,13 +51,13 @@ The user always reviews the values and presses Submit themselves.
 
 | Phase | What we build | Done when… |
 | --- | --- | --- |
-| **1. Secure vault** | Add, view, delete documents; encryption; biometric lock; no internet | Files are unreadable off the phone; app locks itself |
-| 2. Document reader | Camera capture, OCR, document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs |
+| **1. Secure vault** — **Done, with checks deferred to Phase 7** (owner decision, 2026-10-28; see section 8) | Add, view, delete documents; encryption; biometric lock; no internet | Files are unreadable off the phone; app locks itself |
+| 2. Document reader — detailed spec **APPROVED** in section 7 (2026-10-28) | Camera capture, OCR, document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs |
 | 3. Autofill (text) | Autofill service + rules matcher + "Fill all" + review screen | Fills a test form in an app and in Chrome |
 | 4. File uploads | Documents provider (appears in file pickers), photo resize. **Note:** photos can contain hidden details such as GPS location (EXIF). Strip this hidden data before any file is uploaded to a website. **Note (owner decision, Task 1.10p):** multi-page documents store each page as its own encrypted file (not one combined PDF), so a website can get front and back as separate uploads, or Phase 4 builds a combined PDF on the fly only when a website asks for one | Uploads photo + PDF on a real government portal |
 | 5. On-device AI | AI matcher for unknown fields, confidence, site memory | Unusual labels filled correctly; unsure fields left empty |
 | 6. Voice + screen reading | Assist API reader, push-to-talk, optional wake word | Tells which documents a form needs, offline |
-| 7. Hardening + launch | Security review, phishing and prompt-injection tests, Play forms | No high-risk issues; Play review passed |
+| 7. Hardening + launch | Security review, phishing and prompt-injection tests, Play forms; **plus "Before first real user" (section 8): every check deferred from Phase 1** | No high-risk issues; Play review passed; section 8 all closed |
 
 ---
 
@@ -271,9 +271,11 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6). Also: a theme choice in Settings — "Follow phone" (default), "Light", "Dark". It is not secret, so it is stored outside the vault in normal app preferences, so the Unlock screen can use it too. Also: clean up orphan `.bin` files (a `.bin` with no row, left by a crash). **Note:** this cleanup must only run while no save is in progress, using the same database lock (`VaultDatabaseHolder.withDatabase`), because during a save a `.bin` exists briefly before its row | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
 | **1.10p Multi-page documents** | Owner request (found in the Task 1.10 test: Aadhaar front and back could not be one document). One document holds several ordered pages; **owner decision: each page is its own encrypted file** (not combined into one PDF). Needs a real database migration from version 1 to 2 (no destructive migration) with a migration test; per-page associated data binding document id AND page id (**owner decision at plan approval: page id, not page number**; the order lives in the encrypted database; every new page uses `document:<documentId>:page:<pageId>`, only migrated pages keep `document:<id>`); limits 10 pages and 50 MB per document (owner decision); Add screen with several pages, reorder and remove before saving; viewer swipes between pages and can add/remove a page; delete order, crash safety and orphan cleanup for page files. Plan to be approved by the owner before coding | Aadhaar front + back saved as one document, viewed page by page; old single-file documents still open after the migration; all tests pass |
 | **1.10m Motion upgrade** | Owner request (split from 1.10). First propose a "Motion" section for 5.14 and get approval, then implement on all screens: (1) shared element transition: a document card grows into the viewer and back (Compose `SharedTransitionLayout`, stable in Compose 1.12.1); (2) Unlock: the lock shackle springs open on success, the icon shakes gently on failure, light haptic on both; (3) spring physics: buttons and cards press down slightly when tapped, the "+" button and dialogs open with a soft spring; (4) predictive back (Android 14+): `enableOnBackInvokedCallback` in the manifest, supported in `VaultNavigator`; (5) staggered card appearance on the vault list, first appearance only; (6) shimmer skeleton instead of a plain spinner for "Opening…" and while saving; (7) onboarding: cards slide with subtle parallax, hero icons have a small looping animation, page dots animate between pages; (8) success moment after saving and renaming: a self-drawing check mark plus a light haptic; (9) Settings: smooth expand/collapse, and the theme change cross-fades instead of flashing. **Motion rules:** only Compose's built-in animation APIs and animated vector drawables, no animation library (no Lottie) without asking; locking is ALWAYS instant and no animation may delay hiding documents; respect "Remove animations" everywhere; smooth on the owner's phone with no dropped frames (quick performance check, report any stutter); every animation 150–400 ms; calm and premium, no cartoon bounces or flashy effects, every animation has a purpose. Deliverables: all tests pass, screenshots, a short `adb screenrecord` video of the main flows using the screenshot test window only (FLAG_SECURE off only there, sample data only) | Owner approves the Motion section, the video and the manual test; no dropped frames reported |
-| **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met. **Reminder:** remind the owner to delete the `Download/HeyBuddyTest/` sample-files folder on the test phone, and ask before deleting it; also remind the owner that battery optimisation was turned off for Hey Buddy on the test phone for testing (Task 1.10), and offer to turn it back on | Owner approves the report |
+| ~~1.11 Phase review~~ **MOVED to Phase 7, section 8 (owner decision, 2026-10-28)** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met. **Reminder:** remind the owner to delete the `Download/HeyBuddyTest/` sample-files folder on the test phone, and ask before deleting it; also remind the owner that battery optimisation was turned off for Hey Buddy on the test phone for testing (Task 1.10), and offer to turn it back on | Owner approves the report |
 
 ### 5.11 Manual security checks (owner does these at the end of Phase 1)
+
+**Moved (owner decision, 2026-10-28):** these checks are done before the first real user, see section 8.2.
 
 1. **No internet:** check the merged manifest in Android Studio (Merged Manifest tab) — no INTERNET permission.
 2. **Files are unreadable:** on a debug build, copy a `.bin` file off the phone (`adb shell run-as com.heybuddy ...`) and try to open it — it must look like random bytes.
@@ -285,35 +287,18 @@ Use the latest stable versions at the time of building; confirm with the owner i
 
 ### 5.12 Phase 1 exit criteria
 
+**Status (owner decision, 2026-10-28): Phase 1 is DONE, with checks deferred to Phase 7.** Tasks 1.1 to
+1.10m are done and committed. Everything below that is not yet met moved to section 8.
+
 - All tasks 1.1–1.11 done and approved
 - All 15 security rules in 5.5 met and listed in `docs/PHASE1_REPORT.md`
 - All manual checks in 5.11 pass on at least one real phone (not only the emulator)
 - All items in 5.13 are tested and closed
 
-### 5.13 Open test items (must be closed before Phase 1 ends)
+### 5.13 Open test items
 
-| Item | From task | Why still open | How to close it |
-| --- | --- | --- | --- |
-| Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | In Task 1.11, on the Android emulator with a virtual fingerprint: unlock with fingerprint and confirm "Vault unlocked" in logcat |
-| Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | In Task 1.11, on the emulator: use a wrong virtual finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
-| Tink unwrap after the key window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error. The test uses a 30-second test key (the app key is 5 minutes). Task 1.10p full run (143/145): both tests failed again only because the phone had not been unlocked with PIN in the last few seconds ("unlock window was already closed"); owner decision: close it in Task 1.11 | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
-| **HIGHEST PRIORITY** — `fake_pdf.pdf` (text renamed to .pdf) is rejected: NOT TESTED YET on the phone | 1.7 | Owner approved Task 1.7 after testing one image and one PDF. Covered by automated tests (`FileTypeDetectorTest`), not yet by hand | In Task 1.11, with the files in `Download/HeyBuddyTest/`: pick it; expect "Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files…" and the document count unchanged |
-| **HIGHEST PRIORITY** — `broken_photo.jpg` (right first bytes, damaged after) is rejected: NOT TESTED YET | 1.7 | Same as above. No automated test decodes a real damaged image | In Task 1.11: pick it; expect "This image seems to be damaged…" and the count unchanged |
-| **HIGHEST PRIORITY** — `too_large.jpg` (21,000,000 bytes) is rejected: NOT TESTED YET on the phone | 1.7 | Same as above. Size limit covered by automated tests (`PickedFileReaderTest`, `FileCryptoTest`), not yet through the picker | In Task 1.11: pick it; expect "This file is larger than 20 MB…" and the count unchanged |
-| `sample_photo.png` and `sample_photo.webp` save correctly: NOT TESTED YET | 1.7 | Owner tested one image (JPEG) and one PDF only | In Task 1.11: add both; each shows a preview, saves, and the count goes up by 1 |
-| Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, keep using the app (touch the screen at least once a minute so the idle lock does not trigger) for more than 5 minutes, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
-| Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | In Task 1.11: clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
-| Check C: "Choose photos" (called "Choose a photo" before Task 1.10p) opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose photos"; the photo picker opens with no permission question |
-| Keyboard does not cover the Name field or the Save button (Add screen): NOT TESTED YET | 1.8a | Owner skipped this check; the screenshot test cannot open the keyboard | In Task 1.11: on the Add screen with a picked file, tap Name; the field and "Save to vault" must stay visible (or reachable by scrolling) above the keyboard |
-| Home-screen app icon looks right: NOT TESTED YET | 1.8a | Owner skipped this check. App info showed the themed (one-colour) icon correctly | In Task 1.11: check the icon on the home screen, with themed icons both on and off if the phone allows |
-| Back on each screen (viewer → list, Add → list, Rename dialog → closes only the dialog, list → leaves the app): NOT TESTED YET by hand | 1.8b | Owner confirmed list, open, rename and zoom, but not Back. Covered by automated tests (`VaultNavigatorTest`, `ViewerViewModelTest`) | In Task 1.11: try Back on each screen and with the Rename dialog open |
-| Locking while a document is open: NOT TESTED YET by hand | 1.8b | Not explicitly confirmed. Covered by `ViewerViewModelTest` (view_tmp empty, picture freed, back at the list) | In Task 1.11 (after auto-lock exists): open a PDF, let the vault lock, unlock; expect the list, and `view_tmp` empty |
-| Cancelling "Confirm it's you" when opening a document: NOT TESTED YET | 1.8b | Not explicitly confirmed; no automated test (needs a real auth-required key) | In Task 1.11: keep using the app for more than 5 minutes after unlock (touching at least once a minute), open a document, cancel the prompt; expect the calm message and "Try again" |
-| Keyboard in the Rename dialog does not hide the name field or Save: NOT TESTED YET | 1.8b | Not explicitly confirmed | In Task 1.11: open Rename, tap the field; the field and Save must stay visible above the keyboard |
-| "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
-| Predictive back preview: NOT TESTED YET | 1.10m | The back-swipe preview only exists on Android 14+; the owner's phone runs Android 13 | In Task 1.11, on the Android 14+ emulator: swipe back slowly on the viewer, Add and Settings screens; a preview of the previous screen must show, and cancelling the swipe stays on the screen |
-| `SecureWindowTest.ourOwnPickerDoesNotLockTheVault` was flaky once: RECHECK | 1.10 | One full run (100 of 101 passed) failed it with "Activity never becomes requested state RESUMED" while the phone was freezing and unfreezing test processes (battery optimisation). It passed 3 of 3 times on its own | Owner decision: recheck in the Task 1.11 full run, AFTER battery optimisation is turned back on for Hey Buddy; it must pass |
-| Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | In Task 1.11: switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
+**All moved to section 8.1 (owner decision, 2026-10-28).** They are closed before the first real user,
+not before Phase 2.
 
 ### 5.14 UI design system — APPROVED by owner (2026-10-27)
 
@@ -420,7 +405,7 @@ Planned set: the 8 type icons above, plus `lock`, `lock_open`, `fingerprint`, `a
 | 1 | List → viewer | The tapped card grows into the viewer; Back shrinks it into its card again. On lock: no reverse animation, instant. **Built as a "container transform"** (the viewer is revealed through a rounded window growing from the card to full screen while it fades in), **not with `SharedTransitionLayout`**: in the frame check on the owner's phone, `SharedTransitionLayout` doubled the cost (68 % slow frames vs 36 % for a plain fade); the container transform costs the same as a plain fade. Same look, same 350 ms, back-gesture preview still follows the finger. **Confirmed by the owner (Task 1.10m)** | 350 ms |
 | 2 | Unlock | Success: the shackle springs open + light confirm haptic. **Real failure only** (lockout, too many attempts, key not usable): the icon shakes gently 3 times (4 dp) + light reject haptic. **Cancelling the prompt is a choice, not an error** (owner decision): no shake, no haptic, just the calm message | 300 ms / 300 ms |
 | 3 | Buttons, cards, "+", dialogs | Pressed: sink to 97 %. The "+" button and dialogs open with a soft spring from 92 % | about 150 ms / about 250 ms |
-| 4 | Predictive back (Android 14+) | System back-gesture preview on (`enableOnBackInvokedCallback`); a slow back swipe on the viewer, Add and Settings shows the screen behind, cancelling stays put. Tested on the emulator in Task 1.11 (owner phone is Android 13) | follows the finger |
+| 4 | Predictive back (Android 14+) | System back-gesture preview on (`enableOnBackInvokedCallback`); a slow back swipe on the viewer, Add and Settings shows the screen behind, cancelling stays put. Tested on a real Android 14+ phone before the first real user (section 8.1; owner phone is Android 13; no emulator unless the owner asks) | follows the finger |
 | 5 | Vault list | Cards fade in and rise one after another, first appearance only | 200 ms + 40 ms per card, at most 240 ms delay |
 | 6 | "Opening…" and "Saving…" | A grey outline of the page/document with a soft light sweep instead of a spinner | one 400 ms sweep, 1.2 s rest |
 | 7 | Onboarding | Cards slide with a slight depth effect; dots slide and stretch between pages; the hero icon has a small gentle loop | 300 ms slide; loop: one 300 ms nudge, 1.2 s rest |
@@ -457,4 +442,241 @@ Planned set: the 8 type icons above, plus `lock`, `lock_open`, `fingerprint`, `a
 | Play Store only, or also a direct-download build? | Phase 3 | Play Store only |
 | Wake word in version 1, or push-to-talk only? | Phase 6 | Push-to-talk only |
 | Lowest phone to support (decides if AI is required or optional) | Phase 5 | AI optional; rules must work alone |
-| Store full Aadhaar number, or masked only by default? | Phase 2 | Masked by default; full only if the user chooses |
+| ~~Store full Aadhaar number, or masked only by default?~~ **DECIDED (owner, 2026-10-28):** only the last 4 digits by default; the full number only if the user explicitly chooses it; always shown masked | Phase 2 | — |
+
+## 7. PHASE 2 — Document reader (APPROVED by owner, 2026-10-28)
+
+### 7.1 Goal in one sentence
+
+Hey Buddy reads the user's own documents on the phone (camera or vault), finds the important facts
+(name, date of birth, PAN, Aadhaar, address), and saves **only the facts the user has checked and
+confirmed**, linked to the page they came from, without ever going online.
+
+### 7.2 Simple picture
+
+```
+ Camera (in-app)  or  a page already in the vault
+            │  image only in memory
+            ▼
+   OCR on the phone (ML Kit, bundled models)  →  text only in memory, never saved
+            ▼
+   Document type guess  →  fact rules (PAN, Aadhaar + Verhoeff, dates, name, address)
+            ▼
+   Confirm screen: the user checks, edits or rejects EVERY fact
+            ▼
+   Encrypted database: confirmed facts only (Aadhaar: last 4 digits unless the user chooses more)
+```
+
+### 7.3 Security rules for Phase 2 (in addition to all of 5.5)
+
+1. **Still no internet.** OCR runs fully on the phone with models bundled in the app; nothing is
+   downloaded, at install or later. ML Kit includes Google usage-logging parts
+   (`transport-backend-cct`, `transport-runtime`); they ask for INTERNET and ACCESS_NETWORK_STATE.
+   Both permissions and the logging job and receiver are removed from the manifest, so nothing
+   can be sent. A phone test checks that the installed app holds no network permission and that
+   only the launcher activity is exported.
+2. **Images and OCR text live only in memory.** No photo is ever written to disk or to the gallery
+   unencrypted; a captured photo becomes a pending page (the Task 1.10p encrypted pipeline).
+   OCR text is never saved and never logged; it is dropped when the confirm screen closes, on
+   Cancel, and at once on lock.
+3. **Nothing unconfirmed is stored.** Only facts the user confirmed on the confirm screen reach the
+   database (SQLCipher, rule 5).
+4. **Aadhaar (owner decision, 2026-10-28):** only the **last 4 digits** are stored by default. The
+   full 12-digit number is stored only if the user explicitly ticks "Also save the full number";
+   it is **always shown masked** (XXXX XXXX 1234). The full number is never logged.
+5. **Camera permission** is asked only when the user taps "Take a photo", with a plain reason.
+   If refused, everything else still works (photo and file pickers).
+6. **The user always decides** (product rule): the reader suggests; the user confirms.
+
+### 7.4 OCR: ML Kit Text Recognition v2, bundled
+
+| Topic | Answer |
+| --- | --- |
+| Library | **Approved:** `com.google.mlkit:text-recognition-devanagari:16.0.1` (bundled). Its recognizer reads **Devanagari (Hindi) and Latin (English) together**, so one recognizer covers an Aadhaar card. `com.google.mlkit:text-recognition:16.0.1` (Latin only) is added only if Task 2.2 shows it reads English **clearly** better, and only after asking the owner |
+| Bundled vs downloaded | **Bundled**: the models are inside the app. The "unbundled" variant downloads models through Google Play services, which needs internet; we never use it. Works in airplane mode, without Google Play services |
+| Size (measured from the packages) | OCR engine: 10.6 MB for 64-bit phones (6.5 MB for older 32-bit). Models: about 1–3 MB. **About 13–15 MB more on a phone like the owner's.** An APK with both phone types (64 and 32-bit) grows by about 20 MB; a Play app bundle sends each phone only its own type. We keep only `arm64-v8a` and `armeabi-v7a` (no x86, which only emulators use) |
+| Licence | Free to use, but **not open source**: ML Kit is covered by Google's ML Kit Terms of Service (Google APIs Terms). It bundles open-source parts listed in its `third_party_licenses.txt`, which the Settings → Licences screen will show |
+| Brought along | Google Play services base and tasks, ML Kit common, Firebase components, Google data-transport (the usage logging blocked by rule 7.3-1) |
+| Internet needed? | **No.** Recognition is on the phone; there is no model download; the only network part (usage logging) cannot send anything, because the app holds no internet permission and those parts are removed |
+
+### 7.5 Camera: in-app CameraX (recommended) vs the system camera app
+
+| | (a) CameraX inside Hey Buddy — **recommended** | (b) The phone's own camera app |
+| --- | --- | --- |
+| Where the photo goes | Straight into memory (`ImageCapture` with an in-memory callback); we turn it into JPEG bytes and encrypt it as a pending page. **Never a file, never the gallery** | The camera app must write a full photo to a file we give it (plaintext on disk for a moment), and some phone makers' camera apps **also save a copy to the gallery**, which we cannot prevent or even detect |
+| Screen protection | Our own screen: FLAG_SECURE, auto-lock and overlay protection stay on | Another app's screen: our protections do not apply while it is open |
+| Permission | Needs the CAMERA permission (asked when the user taps "Take a photo") | No permission, but a FileProvider and a one-time grant |
+| Work | More: preview, capture button, flash, simple framing guide | Less |
+| Licence | Apache 2.0 (AndroidX) | — |
+
+**Decision (owner, 2026-10-28): (a) CameraX inside the app, capture to memory only**, because rule 7.3-2 (never on disk or in the gallery unencrypted)
+can only be guaranteed when the photo never leaves our app's memory.
+
+### 7.6 Document type detection (rules on the OCR text)
+
+A pure Kotlin function scores the text for each type and suggests the best one; the user can change it.
+
+- **Aadhaar:** "Aadhaar" / "आधार", "Government of India" / "भारत सरकार", "Unique Identification
+  Authority", "VID", plus a 12-digit number in groups of 4 that passes Verhoeff (7.7).
+- **PAN:** "Income Tax Department" / "आयकर विभाग", "Permanent Account Number", plus a valid PAN (7.7).
+- **Passport:** "Republic of India", "Passport", or a machine-readable line starting `P<IND`.
+- **Driving licence:** "Driving Licence", "DL No", "Transport Department", "Union of India".
+- Otherwise **Other**. A weak score means no suggestion (the user picks).
+
+### 7.7 Fact extraction rules (rules first, no AI yet)
+
+Every rule is a small pure function with computer tests on made-up sample text (never real data).
+
+| Fact | Rule, simply |
+| --- | --- |
+| **PAN** | 10 characters: 5 letters, 4 digits, 1 letter (`ABCDE1234F`). The 4th letter tells the holder type (P = person, C = company, H = family business, F = firm, T = trust …); for a personal card it must be P. OCR mix-ups are fixed only by position: in a letter position 0→O, 1→I, 5→S, 8→B; in a digit position the reverse. If it still does not fit, we do not guess |
+| **Aadhaar number** | 12 digits, usually shown as 4-4-4; it never starts with 0 or 1. **Verhoeff check:** the last digit is a check digit worked out from the other 11 with a fixed table. If the OCR misreads any one digit, or swaps two neighbouring digits, the check fails, so we know the number is wrong and ask the user instead of guessing. 16-digit VIDs, 14-digit enrolment numbers and already masked numbers (XXXX XXXX 1234) are recognised and never taken as the Aadhaar number |
+| **Date of birth** | Day first, as on Indian documents: `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY`, and "Year of Birth: YYYY" (older Aadhaar: year only). Must be a real date, not in the future, age 0–120. A date next to "DOB", "Date of Birth" or "जन्म तिथि" wins over other dates (such as issue dates) |
+| **Name** | Aadhaar front: the English line just above the date-of-birth line (the Hindi line above it is skipped). PAN: the line after "Name" / "नाम" (new card) or the first name line under "INCOME TAX DEPARTMENT" (old card). Only letters, spaces and dots, 2–5 words. Always marked "please check" |
+| **Father's name** | PAN: the line after "Father's Name" / "पिता का नाम" (or the second name line on old cards) |
+| **Gender** | "MALE" / "FEMALE" / "TRANSGENDER", or "पुरुष" / "महिला" |
+| **Address** | Aadhaar back: the text after "Address:" / "पता:" up to and including the PIN code, lines joined |
+| **PIN code** | 6 digits, first digit 1–9, normally at the end of the address |
+
+### 7.8 Aadhaar Secure QR (separate, later task: 2.10)
+
+Yes, it can be read **and verified fully offline**. The QR on Aadhaar cards and e-Aadhaar (since
+2019) holds a very large number: turned into bytes and unzipped, it gives the details (reference
+id with the last 4 Aadhaar digits, name, date of birth, gender, address, photo) and, at the end, a
+**digital signature by UIDAI**. We check that signature with UIDAI's public certificate,
+which we put inside the app (taken once from uidai.gov.in at build time; no internet when used).
+A valid signature proves the details are exactly what UIDAI issued, so these facts can be marked
+"verified". It is complex (a dense QR, an exact byte format, certificate updates; the photo is
+JPEG 2000, which Android cannot show, so it is not kept), so it is a **separate task after the
+OCR flow works**. Older QR codes (before 2019) carry no signature and are treated as unverified.
+Library decision at that task: ZXing core (open source, Apache 2.0, small, pure Java) or ML Kit
+Barcode Scanning (bundled; 4.7 MB engine on 64-bit phones, same usage-logging parts as 7.4).
+**Recommended: ZXing core.**
+
+### 7.9 Confirm screen
+
+- Shows each found fact with what it is ("Date of birth") and where it came from ("Aadhaar card, page 1").
+- Every fact has: the value in an editable field, **Keep** (default ON only when the rule is sure, for
+  example a PAN in the right format or an Aadhaar number that passes Verhoeff) and **Remove**.
+  Facts marked "please check" (names, addresses) start unticked until the user looks at them.
+- Aadhaar: shown as XXXX XXXX 1234; a separate tick box "Also save the full number" is OFF by default.
+- One button: **Save checked details**. Back or Cancel saves nothing. Lock discards everything at once.
+- Saving needs no fingerprint/PIN beyond the unlocked vault (the facts go into the already-open
+  encrypted database).
+
+**"My details" (owner decision, 2026-10-28):** a separate tab on the vault screen,
+**"Documents | My details"**, using the approved design system (5.14) and motion. It lists every
+confirmed fact (Aadhaar always masked), with its source ("Aadhaar card, page 1" or "page deleted"),
+and lets the user edit or delete each one.
+
+### 7.10 Data model: profile facts (database version 3, real migration)
+
+New table `profile_facts`:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `factId` | String (UUID) | Primary key |
+| `kind` | String (`FactKind`) | `FULL_NAME`, `FATHER_NAME`, `DATE_OF_BIRTH`, `YEAR_OF_BIRTH`, `GENDER`, `PAN`, `AADHAAR_LAST4`, `AADHAAR_FULL`, `ADDRESS`, `PIN_CODE` |
+| `value` | String | As confirmed by the user (dates stored as `YYYY-MM-DD`) |
+| `documentId` | String, nullable | The source document (foreign key, set to null if the user keeps the fact when the document is deleted) |
+| `pageId` | String, nullable | The page it came from (foreign key to `document_pages`, set to null if the user keeps the fact when the page is deleted) |
+| `sourceDeletedAt` | Long, nullable | Set when the source page/document was deleted but the user kept the fact; shown as "page deleted" |
+| `origin` | String | `OCR`, `QR_VERIFIED` (Task 2.10) or `TYPED` (the user corrected it) |
+| `confirmedAt` / `updatedAt` | Long (epoch ms) | |
+
+- Index on `documentId` and on `pageId`.
+- **Migration 2 → 3**: only adds the table (no existing data changes), tested like `MIGRATION_1_2`
+  (a real version-2 database built from `2.json`, opened by the app, checked by Room).
+- **Deleting a source (owner decision, 2026-10-28):** when a page or document that facts were read
+  from is deleted, its delete dialog also asks **"Also delete the N details read from this page?"**
+  (or "…from this document?") with **Yes selected by default**.
+  - **Yes:** the facts are deleted in the same transaction as the page/document rows.
+  - **No:** the facts are kept; their `pageId`/`documentId` become null and `sourceDeletedAt` is set,
+    so "My details" shows their source as **"page deleted"**.
+  - Dialogs for pages/documents with no facts stay exactly as they are now.
+
+### 7.11 New libraries (each needs the owner's approval)
+
+| # | Library | Version (latest stable) | Licence | Why |
+| --- | --- | --- | --- | --- |
+| 1 | `com.google.mlkit:text-recognition-devanagari` (bundled) — **APPROVED** | 16.0.1 | ML Kit Terms (free, closed source) | Hindi + English OCR on the phone |
+| 2 | `com.google.mlkit:text-recognition` (bundled, Latin) — **ask the owner at Task 2.2**, only if it reads English clearly better | 16.0.1 | ML Kit Terms | Better English OCR |
+| 3 | `androidx.camera:camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-compose` — **APPROVED** | 1.6.2 | Apache 2.0 | In-app camera, photo straight to memory |
+| 4 | `com.google.zxing:core` — **ask the owner at Task 2.10** | latest stable at that time | Apache 2.0 | Reading the Aadhaar Secure QR offline |
+
+Libraries 1 and 2 bring along Google Play services base/basement/tasks, ML Kit common and vision
+common, Firebase components and encoders, and Google data-transport (blocked, see 7.3-1).
+No JSON, network or analytics library is added on purpose. **Owner rule:** the ML Kit
+network/logging parts stay stripped, and a phone test proves the installed app holds no network
+permission.
+
+### 7.12 Task list (do in order, stop after each; plan first, as in Phase 1)
+
+| Task | What | Done when |
+| --- | --- | --- |
+| **2.1 OCR library and privacy guard** | Add the bundled ML Kit recognizer; remove ACCESS_NETWORK_STATE and the data-transport job/receiver from the manifest; keep only `arm64-v8a` and `armeabi-v7a`; phone test: installed app has no network permission, only the launcher is exported; Licences screen shows ML Kit's third-party licences; report the real size added | Test passes; app size growth reported; airplane-mode check by the owner |
+| **2.2 Text reader** | `TextReader`: reads one page (photo bytes in memory, or a PDF page drawn with PdfRenderer) and returns lines with their positions; memory only; wiped after use; never logged. Phone tests on made-up sample images (rendered English and Hindi text). Compare Devanagari-only vs adding Latin on the same samples | Sample text read correctly; decision on library 2 |
+| **2.3 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera |
+| **2.4 Document type guess** | Pure rules (7.6) + computer tests | Each sample type guessed; unknown stays Other |
+| **2.5 Facts part 1: numbers and dates** | PAN rule, Aadhaar rule with Verhoeff, VID/enrolment/masked exclusion, date rules (7.7) + computer tests (including OCR mix-ups) | All rule tests pass |
+| **2.6 Facts part 2: name, gender, address** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts + computer tests on made-up samples | All rule tests pass |
+| **2.7 Profile facts storage** | Table, `FactKind`, migration 2 → 3 with test, repository (save confirmed facts, list, edit, delete), Aadhaar storage rule (7.3-4), the delete-source rule (7.10: "Also delete the N details…?" in the page and document delete dialogs, Yes by default; No keeps them as "page deleted") | Migration test passes; old vault still opens; both delete choices tested |
+| **2.8 Confirm screen** | 7.9, with masked Aadhaar and the "full number" tick box; Save stores only kept facts; lock/cancel discard everything | Nothing unconfirmed stored (test); manual test |
+| **2.9 Entry points and "My details" tab** | "Read details" after saving a document and in the viewer menu; the vault screen gets two tabs, **"Documents | My details"** (design system and motion of 5.14); "My details" lists facts with their source (or "page deleted"), masked Aadhaar, edit, delete | Owner reads a sample Aadhaar and PAN end to end |
+| **2.10 Aadhaar Secure QR (later)** | 7.8: scan, decode, verify the UIDAI signature offline, mark facts verified | Signed QR verified; tampered QR rejected |
+| **2.11 Phase 2 review** | All tests, a short Phase 2 report, size and privacy summary | Owner approves |
+
+### 7.13 Owner decisions (2026-10-28)
+
+1. Libraries: ML Kit Devanagari 16.0.1 and CameraX 1.6.2 approved now; ML Kit Latin only if Task 2.2
+   shows it reads English clearly better (ask then); ZXing at Task 2.10 (ask then). ML Kit
+   network/logging parts stay stripped, proven by a phone test.
+2. Camera: CameraX inside the app, capture to memory only.
+3. Deleting a source page/document asks "Also delete the N details read from this page?" (Yes by
+   default); No keeps the facts marked "page deleted" (7.10).
+4. "My details" is a separate tab on the vault screen: "Documents | My details".
+
+## 8. PHASE 7 — Before first real user (checks deferred from Phase 1)
+
+Owner decision (2026-10-28): Phase 1 is done; these checks are deferred, and **all must be closed
+before the first real user** gets the app. **No emulator anywhere unless the owner asks.**
+
+### 8.1 Open test items (moved from 5.13)
+
+| Item | From task | Why still open | How to close it |
+| --- | --- | --- | --- |
+| Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | On a real phone with a working fingerprint sensor (no emulator unless the owner asks): unlock with fingerprint and confirm "Vault unlocked" in logcat |
+| Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | On that phone: use a wrong finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
+| Tink unwrap after the key window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error. The test uses a 30-second test key (the app key is 5 minutes). Task 1.10p full run (143/145): both tests failed again only because the phone had not been unlocked with PIN in the last few seconds ("unlock window was already closed"); owner decision: close it before the first real user | Unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
+| **HIGHEST PRIORITY** — `fake_pdf.pdf` (text renamed to .pdf) is rejected: NOT TESTED YET on the phone | 1.7 | Owner approved Task 1.7 after testing one image and one PDF. Covered by automated tests (`FileTypeDetectorTest`), not yet by hand | With the files in `Download/HeyBuddyTest/`: pick it; expect "Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files…" and the document count unchanged |
+| **HIGHEST PRIORITY** — `broken_photo.jpg` (right first bytes, damaged after) is rejected: NOT TESTED YET | 1.7 | Same as above. No automated test decodes a real damaged image | Pick it; expect "This image seems to be damaged…" and the count unchanged |
+| **HIGHEST PRIORITY** — `too_large.jpg` (21,000,000 bytes) is rejected: NOT TESTED YET on the phone | 1.7 | Same as above. Size limit covered by automated tests (`PickedFileReaderTest`, `FileCryptoTest`), not yet through the picker | Pick it; expect "This file is larger than 20 MB…" and the count unchanged |
+| `sample_photo.png` and `sample_photo.webp` save correctly: NOT TESTED YET | 1.7 | Owner tested one image (JPEG) and one PDF only | Add both; each shows a preview, saves, and the count goes up by 1 |
+| Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | Unlock, keep using the app (touch the screen at least once a minute so the idle lock does not trigger) for more than 5 minutes, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
+| Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | Clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
+| Check C: "Choose photos" (called "Choose a photo" before Task 1.10p) opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | Tap "Choose photos"; the photo picker opens with no permission question |
+| Keyboard does not cover the Name field or the Save button (Add screen): NOT TESTED YET | 1.8a | Owner skipped this check; the screenshot test cannot open the keyboard | On the Add screen with a picked file, tap Name; the field and "Save to vault" must stay visible (or reachable by scrolling) above the keyboard |
+| Home-screen app icon looks right: NOT TESTED YET | 1.8a | Owner skipped this check. App info showed the themed (one-colour) icon correctly | Check the icon on the home screen, with themed icons both on and off if the phone allows |
+| Back on each screen (viewer → list, Add → list, Rename dialog → closes only the dialog, list → leaves the app): NOT TESTED YET by hand | 1.8b | Owner confirmed list, open, rename and zoom, but not Back. Covered by automated tests (`VaultNavigatorTest`, `ViewerViewModelTest`) | Try Back on each screen and with the Rename dialog open |
+| Locking while a document is open: NOT TESTED YET by hand | 1.8b | Not explicitly confirmed. Covered by `ViewerViewModelTest` (view_tmp empty, picture freed, back at the list) | Open a PDF, let the vault lock, unlock; expect the list, and `view_tmp` empty |
+| Cancelling "Confirm it's you" when opening a document: NOT TESTED YET | 1.8b | Not explicitly confirmed; no automated test (needs a real auth-required key) | Keep using the app for more than 5 minutes after unlock (touching at least once a minute), open a document, cancel the prompt; expect the calm message and "Try again" |
+| Keyboard in the Rename dialog does not hide the name field or Save: NOT TESTED YET | 1.8b | Not explicitly confirmed | Open Rename, tap the field; the field and Save must stay visible above the keyboard |
+| "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
+| Predictive back preview: NOT TESTED YET | 1.10m | The back-swipe preview only exists on Android 14+; the owner's phone runs Android 13 | On a real Android 14+ phone (no emulator unless the owner asks): swipe back slowly on the viewer, Add and Settings screens; a preview of the previous screen must show, and cancelling the swipe stays on the screen |
+| `SecureWindowTest.ourOwnPickerDoesNotLockTheVault` was flaky once: RECHECK | 1.10 | One full run (100 of 101 passed) failed it with "Activity never becomes requested state RESUMED" while the phone was freezing and unfreezing test processes (battery optimisation). It passed 3 of 3 times on its own | Owner decision: recheck in the full run before the first real user, AFTER battery optimisation is turned back on for Hey Buddy; it must pass |
+| Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | Switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
+
+### 8.2 Phase 1 review checks (moved from Task 1.11)
+
+| Check | How to close it |
+| --- | --- |
+| Full test run | Debug build, `adb shell am instrument` with stay-on (CLAUDE.md); every test passes, including `AuthRequiredKeyWrapTest` (8.1) and the `SecureWindowTest` recheck (8.1) |
+| **Release build with R8** | Build the release variant (shrinking and obfuscation on), install it on a real phone, and use every screen once: unlock, add (photo and PDF, several pages), view, rename, delete, settings, delete everything. R8 must not break Room, SQLCipher or Tink (add keep rules only if something breaks). Merged release manifest: no INTERNET or other network permission; only the launcher activity exported |
+| Manual security checks | All 7 checks of section 5.11, on a real phone |
+| `docs/PHASE1_REPORT.md` | Lists each of the 15 rules in 5.5 and how it is met (with the test or check that proves it); owner approves it |
+| Battery optimisation back on | It was turned off for Hey Buddy on the owner's test phone for testing (Task 1.10). Offer to turn it back on (an adb command that changes the phone: ask the owner first) |
+| Delete the sample files | Delete `Download/HeyBuddyTest/` on the owner's test phone (ask the owner first) |
+
+### 8.3 Done when
+
+Every row of 8.1 and 8.2 is closed, and the owner approves `docs/PHASE1_REPORT.md`.
