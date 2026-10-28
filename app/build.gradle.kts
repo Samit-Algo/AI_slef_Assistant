@@ -30,6 +30,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // Only real phones' CPU types (Task 2.1). x86 copies are only for emulators and would add
+            // about 22 MB of OCR and database engine for nothing.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     buildTypes {
@@ -67,6 +73,12 @@ android {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
+    lint {
+        // Hey Buddy is a phone app (spec section 2); the CPU filter above leaves out the x86_64 copy
+        // that only Chromebooks and emulators use, on purpose (Task 2.1).
+        disable += "ChromeOsAbiSupport"
+    }
+
     buildFeatures {
         compose = true
         // SafeLog reads BuildConfig.DEBUG so it can stay silent in release builds.
@@ -87,6 +99,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
     implementation(libs.sqlcipher.android)
+    implementation(libs.mlkit.text.recognition.devanagari)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

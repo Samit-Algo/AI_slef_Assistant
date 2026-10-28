@@ -6,6 +6,10 @@
     <uses-permission
         android:name="android.permission.INTERNET"
         tools:node="remove" />
+    <!-- Spec 7.3 (Task 2.1): ML Kit's logging parts ask for this; Hey Buddy never needs it. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
 
     <!-- enableOnBackInvokedCallback: the back-gesture preview on Android 14+ (spec 5.14, item 4).
          Rule 7: no backups. allowBackup covers Android 11 and below; the two rule files
@@ -22,6 +26,19 @@
         android:enableOnBackInvokedCallback="true"
         tools:ignore="UnusedAttribute"
         android:theme="@style/Theme.HeyBuddy">
+
+        <!-- Rule 1 and spec 7.3 (Task 2.1): ML Kit brings Google's usage-logging parts
+             (data-transport). They could never send anything (no INTERNET permission), but they are
+             removed completely, so nothing even tries. Recognition itself runs on the phone. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            tools:node="remove" />
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            tools:node="remove" />
 
         <!-- Rule 15 (owner decision, Task 1.10m): profileinstaller adds an EXPORTED receiver (used by
              benchmark tools to trigger profile installs). Removed, so the launcher activity stays

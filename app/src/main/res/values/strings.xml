@@ -157,6 +157,10 @@
     <string name="licence_name_sqlcipher">SQLCipher for Android</string>
     <string name="licence_type_ofl">SIL Open Font License 1.1</string>
     <string name="licence_type_apache">Apache License 2.0</string>
+    <string name="licence_loading">Loading the licence text…</string>
+    <string name="licence_name_mlkit">ML Kit Text Recognition (Google)</string>
+    <string name="licence_type_mlkit">ML Kit Terms of Service: free to use, not open source</string>
+    <string name="licence_note_mlkit">ML Kit reads text in your documents on this phone only. Its reading models are built into Hey Buddy, so nothing is ever downloaded or sent. It is free to use under Google\'s ML Kit Terms of Service (part of the Google APIs Terms of Service), but it is not open source. Below are the licences of the open-source parts it contains.</string>
     <string name="licence_type_sqlcipher">BSD-style licence (Zetetic LLC); includes SQLite (public domain)</string>
     <string name="add_document_button">Add document</string>
     <string name="vault_title">Your vault</string>

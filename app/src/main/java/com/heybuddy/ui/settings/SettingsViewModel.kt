@@ -29,8 +29,14 @@ import kotlinx.coroutines.launch
  * @property libraryName What the software is.
  * @property licenceName Which licence it uses.
  * @property licenceText The full licence text, shipped inside the app (no internet needed).
+ * @property note A plain explanation shown above the text, or null.
  */
-enum class LicenceEntry(@StringRes val libraryName: Int, @StringRes val licenceName: Int, @RawRes val licenceText: Int) {
+enum class LicenceEntry(
+    @StringRes val libraryName: Int,
+    @StringRes val licenceName: Int,
+    @RawRes val licenceText: Int,
+    @StringRes val note: Int? = null,
+) {
     INTER(R.string.licence_name_inter, R.string.licence_type_ofl, R.raw.licence_inter_ofl),
     MATERIAL_SYMBOLS(R.string.licence_name_symbols, R.string.licence_type_apache, R.raw.licence_apache_2_0),
     ANDROIDX(R.string.licence_name_androidx, R.string.licence_type_apache, R.raw.licence_apache_2_0),
@@ -38,6 +44,10 @@ enum class LicenceEntry(@StringRes val libraryName: Int, @StringRes val licenceN
     TINK(R.string.licence_name_tink, R.string.licence_type_apache, R.raw.licence_apache_2_0),
     SMALL_LIBRARIES(R.string.licence_name_small, R.string.licence_type_apache, R.raw.licence_apache_2_0),
     SQLCIPHER(R.string.licence_name_sqlcipher, R.string.licence_type_sqlcipher, R.raw.licence_sqlcipher),
+
+    // Not open source itself: ML Kit's terms are summarised in the note; the text below it lists
+    // the open-source parts ML Kit bundles (spec 7.4).
+    ML_KIT(R.string.licence_name_mlkit, R.string.licence_type_mlkit, R.raw.licence_mlkit_third_party, R.string.licence_note_mlkit),
 }
 
 /**
