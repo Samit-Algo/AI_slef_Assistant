@@ -44,10 +44,10 @@ class AuthRequiredKeyWrapTest {
 
     @Test
     fun test1_roundTripWorksRightAfterUnlock() {
-        val documentKey = keyWrapper.generateDocumentKey()
+        val documentKey = keyWrapper.generatePageKey()
 
         val wrappedKey = wrapOrExplain(documentKey)
-        val unwrappedKey = keyWrapper.unwrapDocumentKey(wrappedKey, DOCUMENT_ID)
+        val unwrappedKey = keyWrapper.unwrapPageKey(wrappedKey, PAGE)
 
         val ciphertext = encryptSample(documentKey)
         assertArrayEquals(SAMPLE_CONTENT, decryptSample(unwrappedKey, ciphertext))
@@ -59,13 +59,13 @@ class AuthRequiredKeyWrapTest {
     }
 
     private fun checkUnwrapFailsAfterWindow() {
-        val documentKey = keyWrapper.generateDocumentKey()
+        val documentKey = keyWrapper.generatePageKey()
         val wrappedKey = wrapOrExplain(documentKey)
 
         Thread.sleep(WAIT_PAST_TEST_WINDOW_MILLIS)
 
         try {
-            keyWrapper.unwrapDocumentKey(wrappedKey, DOCUMENT_ID)
+            keyWrapper.unwrapPageKey(wrappedKey, PAGE)
             fail("Unwrap still worked after the key's window")
         } catch (refused: GeneralSecurityException) {
             assertTrue("Refused for another reason: $refused", isMissingUserAuthentication(refused))
@@ -75,7 +75,7 @@ class AuthRequiredKeyWrapTest {
     /** Wraps the key; if the window is already closed, fails with instructions instead of a confusing error. */
     private fun wrapOrExplain(documentKey: com.google.crypto.tink.KeysetHandle): ByteArray {
         try {
-            return keyWrapper.wrapDocumentKey(documentKey, DOCUMENT_ID)
+            return keyWrapper.wrapPageKey(documentKey, PAGE)
         } catch (refused: GeneralSecurityException) {
             if (isMissingUserAuthentication(refused)) {
                 fail("The unlock window was already closed. Unlock the phone with PIN, then run this test within 10 seconds.")
@@ -87,5 +87,6 @@ class AuthRequiredKeyWrapTest {
     private companion object {
         const val TEST_KEY_ALIAS = "hb_master_key_wrap_auth_test"
         const val DOCUMENT_ID = "33333333-3333-3333-3333-333333333333"
+        val PAGE: PageBinding = PageBinding.forNewPage(DOCUMENT_ID, DOCUMENT_ID)
     }
 }

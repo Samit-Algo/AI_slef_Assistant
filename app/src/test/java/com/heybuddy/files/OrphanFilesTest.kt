@@ -4,18 +4,19 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Owner rule B: orphan cleanup only touches files named exactly "<valid UUID>.bin". */
+/** Owner rule B: orphan cleanup only touches files named exactly "<valid UUID>.bin", checked against page ids. */
 class OrphanFilesTest {
 
     @Test
     fun aValidVaultFileNameGivesItsId() {
-        assertEquals(KNOWN_ID, documentIdFromVaultFileName("$KNOWN_ID.bin"))
+        assertEquals(KNOWN_ID, pageIdFromVaultFileName("$KNOWN_ID.bin"))
     }
 
     @Test
     fun anyOtherNameIsIgnored() {
         val notVaultFiles = listOf(
             "$KNOWN_ID.bin.tmp", // a save still in progress (or crashed): handled by TempFileCleaner
+            "$KNOWN_ID.bin.pending", // a page on the Add screen, not saved yet (Task 1.10p)
             "$KNOWN_ID.BIN",
             "$KNOWN_ID.pdf",
             KNOWN_ID,
@@ -26,22 +27,22 @@ class OrphanFilesTest {
             "../$KNOWN_ID.bin",
         )
         for (name in notVaultFiles) {
-            assertNull("\"$name\" must be ignored", documentIdFromVaultFileName(name))
+            assertNull("\"$name\" must be ignored", pageIdFromVaultFileName(name))
         }
     }
 
     @Test
     fun onlyVaultFilesWithoutARowAreOrphans() {
-        val fileNames = listOf("$KNOWN_ID.bin", "$ORPHAN_ID.bin", "$ORPHAN_ID.bin.tmp", "readme.txt")
+        val fileNames = listOf("$KNOWN_ID.bin", "$ORPHAN_ID.bin", "$ORPHAN_ID.bin.tmp", "$ORPHAN_ID.bin.pending", "readme.txt")
 
-        val orphans = findOrphanIds(fileNames, knownIds = setOf(KNOWN_ID))
+        val orphans = findOrphanIds(fileNames, knownPageIds = setOf(KNOWN_ID))
 
         assertEquals(listOf(ORPHAN_ID), orphans)
     }
 
     @Test
     fun nothingIsAnOrphanWhenEveryFileHasARow() {
-        val orphans = findOrphanIds(listOf("$KNOWN_ID.bin"), knownIds = setOf(KNOWN_ID))
+        val orphans = findOrphanIds(listOf("$KNOWN_ID.bin"), knownPageIds = setOf(KNOWN_ID))
 
         assertEquals(emptyList<String>(), orphans)
     }

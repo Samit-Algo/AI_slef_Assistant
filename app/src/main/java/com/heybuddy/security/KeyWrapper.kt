@@ -10,7 +10,7 @@ import com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters
 /**
  * Wraps (encrypts) and unwraps keys with the Keystore master key (rules 3 and 5).
  *
- * Document keys use Tink's own encrypted-keyset format, so we do not invent a file format.
+ * Page keys use Tink's own encrypted-keyset format, so we do not invent a file format.
  * Every wrap is bound to its owner with associated data: unwrapping with a different owner fails.
  *
  * Every call needs the master key, so it can throw UserNotAuthenticatedException once the
@@ -24,11 +24,11 @@ import com.google.crypto.tink.streamingaead.PredefinedStreamingAeadParameters
 class KeyWrapper(private val masterKeyManager: MasterKeyManager) {
 
     /**
-     * Creates a new random key for one document (rule 3: streaming AEAD, AES256_GCM_HKDF_4KB).
+     * Creates a new random key for one page (rule 3: streaming AEAD, AES256_GCM_HKDF_4KB).
      *
-     * @return The new document key. Not wrapped yet.
+     * @return The new page key. Not wrapped yet.
      */
-    fun generateDocumentKey(): KeysetHandle {
+    fun generatePageKey(): KeysetHandle {
         return KeysetHandle.generateNew(
             PredefinedStreamingAeadParameters.AES256_GCM_HKDF_4KB,
             RegistryConfiguration.get(),
@@ -36,39 +36,40 @@ class KeyWrapper(private val masterKeyManager: MasterKeyManager) {
     }
 
     /**
-     * Encrypts a document key with the master key, bound to its document.
+     * Encrypts a NEW page's key with the master key, bound to its page and document (rule 4).
      *
-     * @param documentKey The key to wrap.
-     * @param documentId The owning document's id (rule 4: binds the key to its record).
+     * @param pageKey The key to wrap.
+     * @param binding The new page's binding. Must be the current format: new pages never use the
+     *   old "document:<id>" label (owner decision, Task 1.10p).
      * @return The wrapped key, safe to store in the database.
+     * @throws IllegalArgumentException If [binding] is not the current format.
      */
-    fun wrapDocumentKey(documentKey: KeysetHandle, documentId: String): ByteArray {
+    fun wrapPageKey(pageKey: KeysetHandle, binding: PageBinding): ByteArray {
+        require(binding.isCurrentFormat) { "New pages must use the current page format" }
         val masterAead = loadMasterAead()
-        val associatedData = documentAssociatedData(documentId)
         return TinkProtoKeysetFormat.serializeEncryptedKeyset(
-            documentKey,
+            pageKey,
             masterAead,
-            associatedData,
+            binding.associatedData(),
             RegistryConfiguration.get(),
         )
     }
 
     /**
-     * Decrypts a wrapped document key.
+     * Decrypts a wrapped page key.
      *
-     * @param wrappedKey Bytes from [wrapDocumentKey].
-     * @param documentId The document the key must belong to.
-     * @return The document key.
+     * @param wrappedKey Bytes from [wrapPageKey] (or, for a migrated page, from before Task 1.10p).
+     * @param binding The page the key must belong to.
+     * @return The page key.
      * @throws java.security.GeneralSecurityException If the bytes were changed, belong to another
-     *   owner, or the master key cannot be used right now.
+     *   page, or the master key cannot be used right now.
      */
-    fun unwrapDocumentKey(wrappedKey: ByteArray, documentId: String): KeysetHandle {
+    fun unwrapPageKey(wrappedKey: ByteArray, binding: PageBinding): KeysetHandle {
         val masterAead = loadMasterAead()
-        val associatedData = documentAssociatedData(documentId)
         return TinkProtoKeysetFormat.parseEncryptedKeyset(
             wrappedKey,
             masterAead,
-            associatedData,
+            binding.associatedData(),
             RegistryConfiguration.get(),
         )
     }

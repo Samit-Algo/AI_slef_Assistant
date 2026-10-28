@@ -156,28 +156,32 @@ class VaultRepositoryTest {
     @Test
     fun failedInsertLeavesNoEncryptedFileBehind() = runBlocking {
         val takenId = UUID.randomUUID().toString()
-        val repository = unlockedRepository(newDocumentId = { takenId })
-        // A row with this id already exists (but no file), so the save's insert must fail.
-        holder.withDatabase { database -> database.documentDao().insert(rowWithoutFile(takenId)) }
+        val repository = unlockedRepository(newId = { takenId })
+        // A document with this id already exists, so the save's insert must fail.
+        holder.withDatabase { database -> database.documentDao().insertDocumentWithPages(rowWithoutPages(takenId), emptyList()) }
 
         assertThrowsSuspend<Exception> {
             repository.saveDocument(sampleInput(), "Clash", DocumentType.OTHER, MIME_JPEG)
         }
         assertFalse(fileCrypto.encryptedFileFor(takenId).exists())
-        assertFalse(File(fileCrypto.encryptedFileFor(takenId).path + ".tmp").exists())
+        assertFalse(fileCrypto.pendingFileFor(takenId).exists())
+        assertFalse(File(fileCrypto.pendingFileFor(takenId).path + ".tmp").exists())
     }
 
     @Test
     fun afterDeleteBothTheRowAndTheFileAreGone() = runBlocking {
         val repository = unlockedRepository()
         val saved = repository.saveDocument(sampleInput(), "To delete", DocumentType.CERTIFICATE, MIME_PDF)
-        assertTrue(fileCrypto.encryptedFileFor(saved.id).exists())
+        val pageFile = onlyPageFileOf(repository, saved.id)
+        assertTrue(pageFile.exists())
 
         repository.deleteDocument(saved.id)
 
         val row = holder.withDatabase { database -> database.documentDao().findById(saved.id) }
+        val pageRows = holder.withDatabase { database -> database.documentDao().pagesOf(saved.id) }
         assertNull(row)
-        assertFalse(fileCrypto.encryptedFileFor(saved.id).exists())
+        assertTrue("page rows (with their keys) must be gone", pageRows.isEmpty())
+        assertFalse(pageFile.exists())
     }
 
     @Test
@@ -232,11 +236,11 @@ class VaultRepositoryTest {
     }
 
     /**
-     * A lock during a save: the save finishes first, then the database closes.
-     * Afterwards the row and its file both exist, and new work is refused while locked.
+     * A lock while a page is still being encrypted (before the database step): nothing is saved and
+     * no file of any kind is left behind (Task 1.10p: pages are encrypted before the save itself).
      */
     @Test
-    fun lockDuringASaveLetsTheSaveFinishThenCloses() = runBlocking {
+    fun lockWhileAPageIsEncryptedSavesNothingAndLeavesNoFiles() = runBlocking {
         val repository = unlockedRepository()
         val gatedInput = GatedInputStream(totalBytes = SAMPLE_BYTES)
         val save = async(Dispatchers.IO) {
@@ -245,15 +249,51 @@ class VaultRepositoryTest {
         assertTrue("Save never started", gatedInput.started.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
 
         lockState.lock()
-        assertEquals(LockStatus.LOCKED, lockState.status.value)
         gatedInput.gate.countDown()
+        val saveOutcome = withTimeout(TIMEOUT_MILLIS) { save.await() }
+        holder.awaitPendingWork()
+
+        assertTrue("Expected VaultLockedException, got $saveOutcome", saveOutcome.exceptionOrNull() is VaultLockedException)
+        assertTrue("No file may stay behind", vaultDir.listFiles().isNullOrEmpty())
+    }
+
+    /**
+     * A lock during the database step of a save: the save finishes first, then the database closes.
+     * Afterwards the rows and the file all exist, and new work is refused while locked.
+     */
+    @Test
+    fun lockDuringTheDatabaseStepLetsTheSaveFinishThenCloses() = runBlocking {
+        // The repository reads the clock only inside the database step, so a clock that waits for
+        // a gate holds the save right there, while the database lock is held.
+        val insideDatabaseStep = CountDownLatch(1)
+        val gate = CountDownLatch(1)
+        val gatedClock = {
+            insideDatabaseStep.countDown()
+            gate.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            FIXED_TIME
+        }
+        lockState.markUnlocked()
+        holder.awaitPendingWork()
+        val repository = VaultRepository(holder, lockState, keyWrapper, fileCrypto, clock = gatedClock)
+        val save = async(Dispatchers.IO) {
+            runCatching { repository.saveDocument(sampleInput(), "Mid-save", DocumentType.AADHAAR, MIME_JPEG) }
+        }
+        assertTrue("Save never reached the database", insideDatabaseStep.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+
+        lockState.lock()
+        assertEquals(LockStatus.LOCKED, lockState.status.value)
+        gate.countDown()
         val saveOutcome = withTimeout(TIMEOUT_MILLIS) { save.await() }
         holder.awaitPendingWork()
 
         assertTrue("Save failed: ${saveOutcome.exceptionOrNull()}", saveOutcome.isSuccess)
         assertFalse(holder.isOpenForTest())
         val savedId = saveOutcome.getOrThrow().id
-        assertTrue("File must exist for the saved row", fileCrypto.encryptedFileFor(savedId).exists())
+        lockState.markUnlocked()
+        holder.awaitPendingWork()
+        assertTrue("File must exist for the saved row", onlyPageFileOf(repository, savedId).exists())
+        lockState.lock()
+        holder.awaitPendingWork()
         assertThrowsSuspend<VaultLockedException> {
             repository.saveDocument(sampleInput(), "After lock", DocumentType.OTHER, MIME_JPEG)
         }
@@ -273,16 +313,21 @@ class VaultRepositoryTest {
         assertTrue(firstList(repository).isEmpty())
     }
 
-    private fun repository(newDocumentId: () -> String = { UUID.randomUUID().toString() }): VaultRepository {
-        return VaultRepository(holder, lockState, keyWrapper, fileCrypto, newDocumentId = newDocumentId)
+    private fun repository(newId: () -> String = { UUID.randomUUID().toString() }): VaultRepository {
+        return VaultRepository(holder, lockState, keyWrapper, fileCrypto, newId = newId)
     }
 
     private suspend fun unlockedRepository(
-        newDocumentId: () -> String = { UUID.randomUUID().toString() },
+        newId: () -> String = { UUID.randomUUID().toString() },
     ): VaultRepository {
         lockState.markUnlocked()
         holder.awaitPendingWork()
-        return repository(newDocumentId)
+        return repository(newId)
+    }
+
+    private suspend fun onlyPageFileOf(repository: VaultRepository, documentId: String): File {
+        val page = repository.documentDetails(documentId).pages.single()
+        return fileCrypto.encryptedFileFor(page.pageId)
     }
 
     private suspend fun firstList(repository: VaultRepository): List<DocumentSummary> {
@@ -314,8 +359,8 @@ class VaultRepositoryTest {
         }
     }
 
-    private fun rowWithoutFile(id: String): DocumentEntity {
-        return DocumentEntity(id, "Existing", DocumentType.OTHER.name, MIME_JPEG, 1, byteArrayOf(1), 0, 0)
+    private fun rowWithoutPages(id: String): DocumentEntity {
+        return DocumentEntity(id, "Existing", DocumentType.OTHER.name, createdAt = 0, updatedAt = 0)
     }
 
     private fun sampleInput(): ByteArrayInputStream = ByteArrayInputStream(ByteArray(SAMPLE_BYTES) { 42 })
@@ -370,6 +415,7 @@ class VaultRepositoryTest {
         const val TIMEOUT_MILLIS = 10_000L
         const val TIMEOUT_SECONDS = 10L
         const val POLL_MILLIS = 20L
+        const val FIXED_TIME = 1_700_000_000_000L
         const val ZERO: Byte = 0
 
         /** The first 16 bytes of every unencrypted SQLite file. */

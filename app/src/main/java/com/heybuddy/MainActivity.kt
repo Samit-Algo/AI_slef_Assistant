@@ -64,6 +64,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.heybuddy.ui.TopScreen
 import com.heybuddy.ui.VaultScreen
+import com.heybuddy.ui.adddocument.AddDocumentActions
 import com.heybuddy.ui.adddocument.AddDocumentScreen
 import com.heybuddy.ui.adddocument.AddDocumentViewModel
 import com.heybuddy.ui.chooseTopScreen
@@ -400,6 +401,8 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
                     lockState = container.vaultLockState,
                     navigator = container.vaultNavigator,
                     tempFileCleaner = container.tempFileCleaner,
+                    preparer = container.pagePreparer,
+                    saver = container.addDocumentSaver,
                 )
             }
         },
@@ -431,6 +434,14 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
             onDeleteClick = viewerViewModel::openDelete,
             onDeleteConfirm = viewerViewModel::confirmDelete,
             onDeleteDismiss = viewerViewModel::closeDelete,
+            onDocumentPageChanged = { index -> viewerViewModel.showDocumentPage(activity, index) },
+            onAddPageClick = viewerViewModel::openAddPage,
+            onAddPageDismiss = viewerViewModel::closeAddPage,
+            onPagesPicked = { uris -> viewerViewModel.onPagesPicked(activity, uris) },
+            onRemovePageClick = viewerViewModel::openRemovePage,
+            onRemovePageConfirm = { viewerViewModel.confirmRemovePage(activity) },
+            onRemovePageDismiss = viewerViewModel::closeRemovePage,
+            onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
         ),
     )
 }
@@ -501,6 +512,7 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
             initializer {
                 AddDocumentViewModel(
                     appContext = activity.applicationContext,
+                    preparer = container.pagePreparer,
                     saver = container.addDocumentSaver,
                     unlocker = container.biometricUnlocker,
                     lockState = container.vaultLockState,
@@ -509,7 +521,7 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
         },
     )
     val uiState by addViewModel.uiState.collectAsStateWithLifecycle()
-    // Back, Cancel and Done all wipe any picked file bytes before returning to the list.
+    // Back, Cancel and Done all delete any pages not saved yet before returning to the list.
     val closeAndForget = {
         addViewModel.reset()
         onClose()
@@ -517,16 +529,21 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
     BackHandler(onBack = closeAndForget)
     AddDocumentScreen(
         uiState = uiState,
-        onFilePicked = addViewModel::onFilePicked,
-        onTypeChosen = addViewModel::onTypeChosen,
-        onNameChanged = { name ->
-            // Keyboard taps go to the keyboard's window, so typing is reported to the idle timer here.
-            container.autoLock.onUserActivity()
-            addViewModel.onNameChanged(name)
-        },
-        onSaveClick = { addViewModel.onSaveClicked(activity) },
-        onClose = closeAndForget,
-        onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+        actions = AddDocumentActions(
+            onFilesPicked = addViewModel::onFilesPicked,
+            onRemovePage = addViewModel::onRemovePage,
+            onMovePageUp = addViewModel::onMovePageUp,
+            onMovePageDown = addViewModel::onMovePageDown,
+            onTypeChosen = addViewModel::onTypeChosen,
+            onNameChanged = { name ->
+                // Keyboard taps go to the keyboard's window, so typing is reported to the idle timer here.
+                container.autoLock.onUserActivity()
+                addViewModel.onNameChanged(name)
+            },
+            onSaveClick = { addViewModel.onSaveClicked(activity) },
+            onClose = closeAndForget,
+            onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+        ),
     )
 }
 

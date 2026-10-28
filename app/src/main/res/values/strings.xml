@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Hey Buddy</string>
 
     <!-- Shared -->
@@ -56,6 +56,10 @@
     <string name="vault_empty_title">Your vault is empty</string>
     <string name="vault_empty_body">Tap + to add your first document.</string>
     <string name="vault_added_on">Added %1$s</string>
+    <plurals name="vault_added_on_with_pages">
+        <item quantity="one">Added %1$s · %2$d page</item>
+        <item quantity="other">Added %1$s · %2$d pages</item>
+    </plurals>
 
     <!-- Viewer -->
     <string name="viewer_opening">Opening…</string>
@@ -64,6 +68,23 @@
     <string name="viewer_previous_page">Previous page</string>
     <string name="viewer_next_page">Next page</string>
     <string name="viewer_page_of">Page %1$d of %2$d</string>
+    <string name="viewer_previous_pdf_page">Previous PDF page</string>
+    <string name="viewer_next_pdf_page">Next PDF page</string>
+    <string name="viewer_pdf_page_of">PDF page %1$d of %2$d</string>
+    <string name="viewer_add_page">Add page</string>
+    <string name="viewer_remove_page">Remove this page</string>
+    <string name="viewer_adding_pages">Adding pages…</string>
+    <string name="viewer_removing_page">Removing page…</string>
+    <string name="viewer_error_add_confirm">Please confirm it\'s you to add the page. Tap Add page to try again.</string>
+    <string name="viewer_error_add_other">The page couldn\'t be added. Please try again.</string>
+    <string name="viewer_error_remove_page">This page couldn\'t be removed. Please try again.</string>
+    <string name="add_page_dialog_title">Add a page</string>
+    <string name="add_page_dialog_body">Where is the new page?</string>
+    <string name="add_page_dialog_photos">Photos</string>
+    <string name="add_page_dialog_files">PDF or file</string>
+    <string name="remove_page_title">Remove this page?</string>
+    <string name="remove_page_body" tools:ignore="PluralsCandidate">Page %1$d will be removed from this document for good and can\'t be brought back. The other pages stay.</string>
+    <string name="remove_page_confirm">Remove page</string>
     <string name="viewer_retry">Try again</string>
     <string name="viewer_back_to_vault">Back to your vault</string>
     <string name="viewer_error_unreadable">This document can\'t be opened. It may be damaged.</string>
@@ -71,9 +92,9 @@
     <string name="viewer_error_other">Something went wrong while opening this document. Please try again.</string>
     <string name="rename_title">Rename document</string>
     <string name="rename_save">Save</string>
-    <string name="viewer_delete">Delete</string>
+    <string name="viewer_delete">Delete document</string>
     <string name="delete_one_title">Delete this document?</string>
-    <string name="delete_one_body">It will be removed from your vault for good and can\'t be brought back.\n\nThe original file in your gallery or downloads is not touched.</string>
+    <string name="delete_one_body">It will be removed from your vault for good, with all its pages, and can\'t be brought back.\n\nThe original file in your gallery or downloads is not touched.</string>
     <string name="delete_one_confirm">Delete</string>
     <string name="viewer_deleting">Deleting…</string>
     <string name="viewer_error_delete">This document couldn\'t be deleted. Please go back and try again.</string>
@@ -150,17 +171,25 @@
 
     <!-- Add document screen -->
     <string name="add_title">Add document</string>
-    <string name="add_intro">Hey Buddy reads the file once and keeps an encrypted copy. It never needs access to your other files.</string>
-    <string name="add_choose_photo">Choose a photo</string>
-    <string name="add_choose_file">Choose a PDF or file</string>
-    <string name="add_reading">Reading the file…</string>
-    <string name="add_preview_unavailable">Preview not available for this PDF. You can still save it.</string>
-    <string name="add_preview_description">Preview of the chosen file</string>
+    <string name="add_intro">Hey Buddy reads each file once and keeps an encrypted copy. It never needs access to your other files.\n\nA document can have up to 10 pages, for example the front and back of a card.</string>
+    <string name="add_choose_photo">Choose photos</string>
+    <string name="add_choose_file">Choose PDFs or files</string>
+    <string name="add_reading">Reading and encrypting…</string>
+    <string name="add_preview_unavailable">Page %1$d, a PDF without preview</string>
+    <string name="add_preview_description">Preview of page %1$d</string>
+    <string name="add_pages_title">Pages (%1$d)</string>
+    <string name="add_page_label">Page %1$d</string>
+    <string name="add_page_is_pdf">PDF</string>
+    <string name="add_move_page_up">Move page %1$d up</string>
+    <string name="add_move_page_down" tools:ignore="PluralsCandidate">Move page %1$d down</string>
+    <string name="add_remove_page">Remove page %1$d</string>
+    <string name="add_more_photos">Add more photos</string>
+    <string name="add_more_files">Add a PDF or file</string>
+    <string name="add_page_limit_reached">This document has the most pages allowed (%1$d).</string>
     <string name="add_type_label">Document type</string>
     <string name="add_type_placeholder">Choose a type</string>
     <string name="add_name_label">Name</string>
     <string name="add_save_button">Save to vault</string>
-    <string name="add_choose_other_file">Choose a different file</string>
     <string name="add_cancel">Cancel</string>
     <string name="add_saving">Saving to your vault…</string>
     <string name="add_saved_title">Saved</string>
@@ -175,5 +204,7 @@
     <string name="add_error_vault_locked">Your vault locked. Unlock it and try again.</string>
     <string name="add_error_confirmation_needed">Please confirm it\'s you to save. Tap Save to try again.</string>
     <string name="add_error_storage_full">Your phone is out of storage space. Free up some space and try again.</string>
+    <string name="add_error_too_many_pages">A document can have at most 10 pages. Remove a page first, or save this one and add the rest as a new document.</string>
+    <string name="add_error_document_too_large">All pages together can be at most 50 MB. Remove a page or choose smaller files.</string>
     <string name="add_error_other">Something went wrong. Your document was not saved. Please try again.</string>
 </resources>

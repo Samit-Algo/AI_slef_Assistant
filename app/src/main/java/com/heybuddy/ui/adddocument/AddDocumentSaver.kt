@@ -6,17 +6,18 @@ import com.heybuddy.data.DisplayNameProblem
 import com.heybuddy.data.DocumentSummary
 import com.heybuddy.data.DocumentType
 import com.heybuddy.data.InvalidDisplayNameException
+import com.heybuddy.data.PageLimitException
+import com.heybuddy.data.PageLimitProblem
+import com.heybuddy.data.PreparedPage
 import com.heybuddy.data.VaultLockedException
 import com.heybuddy.data.VaultRepository
 import com.heybuddy.files.FileTooLargeException
-import com.heybuddy.files.PickedFile
 import com.heybuddy.files.isStorageFull
 import com.heybuddy.security.KeyAccessResult
 import com.heybuddy.security.MasterKeyAccess
-import java.io.ByteArrayInputStream
 
 /**
- * Why adding a document failed. Each has a plain message that says what to do next.
+ * Why adding a document or page failed. Each has a plain message that says what to do next.
  *
  * @property message The text to show the user.
  */
@@ -28,6 +29,8 @@ enum class AddDocumentFailure(@StringRes val message: Int) {
     VAULT_LOCKED(R.string.add_error_vault_locked),
     CONFIRMATION_NEEDED(R.string.add_error_confirmation_needed),
     STORAGE_FULL(R.string.add_error_storage_full),
+    TOO_MANY_PAGES(R.string.add_error_too_many_pages),
+    DOCUMENT_TOO_LARGE(R.string.add_error_document_too_large),
     OTHER(R.string.add_error_other),
 }
 
@@ -57,51 +60,32 @@ sealed interface SaveOutcome {
 }
 
 /**
- * Saves a picked file into the vault and turns every possible error into a [SaveOutcome].
- * Kept separate from the screen so the whole flow can be tested without UI.
+ * Saves prepared pages into the vault and turns every possible error into an outcome.
+ * Kept separate from the screens so the whole flow can be tested without UI.
  *
- * @param repository Saves the document.
- * @param freeSpaceBytes How much storage space is free for the vault right now.
+ * @param repository Saves the documents and pages.
  */
-class AddDocumentSaver(
-    private val repository: VaultRepository,
-    private val freeSpaceBytes: () -> Long,
-) {
+class AddDocumentSaver(private val repository: VaultRepository) {
 
     /**
-     * Saves the file. Never throws: every failure comes back as an outcome.
+     * Saves a new document. Never throws: every failure comes back as an outcome.
+     * On failure the pages stay pending, so the user can fix the problem and tap Save again.
      *
-     * @param pickedFile The file, already read and type-checked. Not wiped here (the caller may
-     *   want to retry); the caller wipes it when done.
+     * @param documentId The id the pages were prepared for.
+     * @param pages The pages, first page first.
      * @param type The type the user chose.
      * @param displayName The name the user typed.
      * @param keyAccess Asks "Confirm it's you" and retries once if the unlock window has expired.
      * @return What happened.
      */
     suspend fun save(
-        pickedFile: PickedFile,
+        documentId: String,
+        pages: List<PreparedPage>,
         type: DocumentType,
         displayName: String,
         keyAccess: MasterKeyAccess,
     ): SaveOutcome {
-        if (!hasRoomFor(pickedFile)) {
-            return SaveOutcome.Failed(AddDocumentFailure.STORAGE_FULL)
-        }
-        val result = keyAccess.runSuspending {
-            // A new stream for every attempt, so a retry after "Confirm it's you" reads from the start.
-            val input = ByteArrayInputStream(pickedFile.bytes)
-            repository.saveDocument(input, displayName, type, pickedFile.type.mimeType)
-        }
-        return toOutcome(result)
-    }
-
-    private fun hasRoomFor(pickedFile: PickedFile): Boolean {
-        // The encrypted copy is a little bigger than the original; keep a safety margin on top.
-        val needed = pickedFile.bytes.size + pickedFile.bytes.size / ENCRYPTION_OVERHEAD_DIVISOR + SAFETY_MARGIN_BYTES
-        return freeSpaceBytes() >= needed
-    }
-
-    private fun toOutcome(result: KeyAccessResult<DocumentSummary>): SaveOutcome {
+        val result = keyAccess.runSuspending { repository.saveDocument(documentId, pages, displayName, type) }
         return when (result) {
             is KeyAccessResult.Success -> SaveOutcome.Saved(result.value)
             is KeyAccessResult.NeedsConfirmation -> SaveOutcome.Failed(AddDocumentFailure.CONFIRMATION_NEEDED)
@@ -109,21 +93,48 @@ class AddDocumentSaver(
         }
     }
 
-    private fun outcomeForError(error: Throwable): SaveOutcome {
-        return when {
-            error is InvalidDisplayNameException -> SaveOutcome.NameRejected(error.problem)
-            error is VaultLockedException -> SaveOutcome.Failed(AddDocumentFailure.VAULT_LOCKED)
-            error is FileTooLargeException -> SaveOutcome.Failed(AddDocumentFailure.TOO_LARGE)
-            isStorageFull(error) -> SaveOutcome.Failed(AddDocumentFailure.STORAGE_FULL)
-            else -> SaveOutcome.Failed(AddDocumentFailure.OTHER)
+    /**
+     * Adds pages to the end of an existing document (the viewer's "Add page").
+     *
+     * @param documentId The document's id.
+     * @param pages Pages prepared for it.
+     * @param keyAccess Asks "Confirm it's you" and retries once if the unlock window has expired.
+     * @return null when the pages were added, otherwise why not (the pages then stay pending).
+     */
+    suspend fun addPages(documentId: String, pages: List<PreparedPage>, keyAccess: MasterKeyAccess): AddDocumentFailure? {
+        val result = keyAccess.runSuspending { repository.addPages(documentId, pages) }
+        return when (result) {
+            is KeyAccessResult.Success -> null
+            is KeyAccessResult.NeedsConfirmation -> AddDocumentFailure.CONFIRMATION_NEEDED
+            is KeyAccessResult.Failed -> failureFor(result.error)
         }
     }
 
-    private companion object {
-        /** Tink adds well under 1% to a file; 1/64 is a generous estimate. */
-        const val ENCRYPTION_OVERHEAD_DIVISOR = 64
+    private fun outcomeForError(error: Throwable): SaveOutcome {
+        if (error is InvalidDisplayNameException) return SaveOutcome.NameRejected(error.problem)
+        return SaveOutcome.Failed(failureFor(error))
+    }
 
-        /** Room for the database row and other small writes during a save. */
-        const val SAFETY_MARGIN_BYTES = 1024L * 1024L
+    private fun failureFor(error: Throwable): AddDocumentFailure {
+        return when {
+            error is VaultLockedException -> AddDocumentFailure.VAULT_LOCKED
+            error is FileTooLargeException -> AddDocumentFailure.TOO_LARGE
+            error is PageLimitException -> failureForLimit(error.problem)
+            isStorageFull(error) -> AddDocumentFailure.STORAGE_FULL
+            else -> AddDocumentFailure.OTHER
+        }
+    }
+}
+
+/**
+ * The message for a broken document limit.
+ *
+ * @param problem Which limit.
+ * @return The matching failure.
+ */
+fun failureForLimit(problem: PageLimitProblem): AddDocumentFailure {
+    return when (problem) {
+        PageLimitProblem.TOO_MANY_PAGES -> AddDocumentFailure.TOO_MANY_PAGES
+        PageLimitProblem.DOCUMENT_TOO_LARGE -> AddDocumentFailure.DOCUMENT_TOO_LARGE
     }
 }

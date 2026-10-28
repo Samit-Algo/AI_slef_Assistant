@@ -7,18 +7,18 @@ import android.graphics.ImageDecoder
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.core.graphics.createBitmap
-import com.heybuddy.util.PREVIEW_MAX_PIXELS
+import com.heybuddy.util.THUMBNAIL_MAX_PIXELS
 import java.io.IOException
 import java.nio.ByteBuffer
 
 /** The image could not be decoded: its first bytes look right, but the rest is damaged. */
 class DamagedImageException(cause: Throwable) : IOException("Image could not be decoded", cause)
 
-/** Builds the small preview shown before saving. Nothing is ever written to our storage. */
+/** Builds the small page thumbnails shown before saving. Nothing is ever written to our storage. */
 object FilePreview {
 
     /**
-     * Decodes a picked image, scaled down so its longest side is at most [PREVIEW_MAX_PIXELS].
+     * Decodes a picked image, scaled down so its longest side is at most [THUMBNAIL_MAX_PIXELS].
      *
      * Decoding fully also checks the image: a file that only fakes the first bytes fails here.
      * ImageDecoder applies the photo's rotation, so the preview is the right way up.
@@ -68,7 +68,7 @@ object FilePreview {
     }
 
     private fun renderPage(page: PdfRenderer.Page): Bitmap {
-        val scale = PREVIEW_MAX_PIXELS.toFloat() / maxOf(page.width, page.height)
+        val scale = THUMBNAIL_MAX_PIXELS.toFloat() / maxOf(page.width, page.height)
         val width = (page.width * scale).toInt().coerceAtLeast(1)
         val height = (page.height * scale).toInt().coerceAtLeast(1)
         val bitmap = createBitmap(width, height)
@@ -78,10 +78,10 @@ object FilePreview {
         return bitmap
     }
 
-    /** The smallest power of two that brings [longestSide] down to the preview size. */
+    /** The smallest power of two that brings [longestSide] down to the thumbnail size. */
     private fun sampleSizeFor(longestSide: Int): Int {
         var sampleSize = 1
-        while (longestSide / (sampleSize * 2) >= PREVIEW_MAX_PIXELS) {
+        while (longestSide / (sampleSize * 2) >= THUMBNAIL_MAX_PIXELS) {
             sampleSize *= 2
         }
         return sampleSize

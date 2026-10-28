@@ -227,11 +227,17 @@ private fun AppearingCard(
 private fun DocumentCardFor(document: DocumentSummary, onOpenDocument: (String) -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val dateText = formatAddedDate(document.createdAt, ZoneId.systemDefault(), locale)
+    // One-page documents keep the short line; only several pages are worth mentioning.
+    val addedText = if (document.pageCount > 1) {
+        pluralStringResource(R.plurals.vault_added_on_with_pages, document.pageCount, dateText, document.pageCount)
+    } else {
+        stringResource(R.string.vault_added_on, dateText)
+    }
     DocumentCard(
         name = document.displayName,
         type = document.type,
         typeLabel = stringResource(labelFor(document.type)),
-        addedText = stringResource(R.string.vault_added_on, dateText),
+        addedText = addedText,
         onClick = { onOpenDocument(document.id) },
     )
 }

@@ -1,10 +1,8 @@
 package com.heybuddy.ui.adddocument
 
-import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.annotation.StringRes
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
@@ -13,24 +11,21 @@ import com.heybuddy.data.DisplayNameProblem
 import com.heybuddy.data.DisplayNameResult
 import com.heybuddy.data.DisplayNameValidator
 import com.heybuddy.data.DocumentType
-import com.heybuddy.files.FileTooLargeException
-import com.heybuddy.files.FileTypeDetector
-import com.heybuddy.files.PickedFile
-import com.heybuddy.files.PickedFileReader
+import com.heybuddy.data.PreparedPage
+import com.heybuddy.data.movedDown
+import com.heybuddy.data.movedUp
+import com.heybuddy.data.pageLimitProblem
 import com.heybuddy.security.BiometricReAuthPrompt
 import com.heybuddy.security.BiometricUnlocker
 import com.heybuddy.security.LockStatus
 import com.heybuddy.security.MasterKeyAccess
 import com.heybuddy.security.VaultLockState
-import com.heybuddy.util.MAX_FILE_BYTES
-import kotlinx.coroutines.Dispatchers
+import com.heybuddy.util.MAX_PAGES_PER_DOCUMENT
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /** Which step of adding a document the screen is on. */
 enum class AddStage {
@@ -42,11 +37,19 @@ enum class AddStage {
 }
 
 /**
+ * One page on the Add screen.
+ *
+ * @property pageId The pending page's id.
+ * @property thumbnail A small picture of it, or null (a PDF that cannot be previewed).
+ * @property isPdf True for a PDF.
+ */
+data class DraftPage(val pageId: String, val thumbnail: Bitmap?, val isPdf: Boolean)
+
+/**
  * What the Add document screen shows.
  *
  * @property stage The current step.
- * @property preview The picked file's preview, or null (for a PDF that cannot be previewed).
- * @property isPdf True when the picked file is a PDF (shows a PDF badge without a preview).
+ * @property pages The pages so far, in the order they will be saved.
  * @property documentType The type the user chose, or null before choosing.
  * @property name The name in the text field.
  * @property nameProblem Why the current name is not allowed, or null if it is fine.
@@ -54,31 +57,37 @@ enum class AddStage {
  */
 data class AddDocumentUiState(
     val stage: AddStage = AddStage.CHOOSING,
-    val preview: Bitmap? = null,
-    val isPdf: Boolean = false,
+    val pages: List<DraftPage> = emptyList(),
     val documentType: DocumentType? = null,
     val name: String = "",
     val nameProblem: DisplayNameProblem? = null,
     @StringRes val errorMessage: Int? = null,
 ) {
-    /** Save is allowed once a type is chosen and the name passes every rule. */
+    /** Save is allowed once there is a page, a type is chosen and the name passes every rule. */
     val canSave: Boolean
-        get() = stage == AddStage.READY && documentType != null && nameProblem == null
+        get() = stage == AddStage.READY && pages.isNotEmpty() && documentType != null && nameProblem == null
+
+    /** More pages may be added until the document limit (owner decision, Task 1.10p). */
+    val canAddPage: Boolean
+        get() = pages.size < MAX_PAGES_PER_DOCUMENT
 }
 
 /**
- * Runs the Add document screen: pick, check, preview, name, save.
+ * Runs the Add document screen: pick one or more pages, order them, choose type and name, save.
  *
- * The picked file is read ONCE into memory; the type check, preview and save all use those exact
- * bytes. They are wiped after saving, on cancel, when another file is picked, and on lock.
+ * Each picked file is read once, checked, thumbnailed and encrypted straight away into a pending
+ * page (see [PagePreparer]); its plaintext is wiped at once. Only small thumbnails stay in memory.
+ * The pending pages are deleted on Cancel, on Back, when removed, and as soon as the vault locks.
  *
- * @param appContext The application context (for the content resolver and default names).
- * @param saver Saves the file and turns errors into outcomes.
+ * @param appContext The application context (for default names).
+ * @param preparer Turns picked files into pending pages.
+ * @param saver Saves the pages as one document.
  * @param unlocker Shows "Confirm it's you" when the unlock window has expired.
- * @param lockState The app's lock; the picked bytes are wiped as soon as it locks.
+ * @param lockState The app's lock; pending pages are deleted as soon as it locks.
  */
 class AddDocumentViewModel(
     private val appContext: Context,
+    private val preparer: PagePreparer,
     private val saver: AddDocumentSaver,
     private val unlocker: BiometricUnlocker,
     private val lockState: VaultLockState,
@@ -89,8 +98,12 @@ class AddDocumentViewModel(
     /** The current screen state. */
     val uiState: StateFlow<AddDocumentUiState> = mutableUiState.asStateFlow()
 
-    // Plaintext of the picked file. Only touched on the main thread.
-    private var pickedFile: PickedFile? = null
+    // Everything below is only touched on the main thread.
+    // The id every page of this draft is bound to; made when the first page is picked.
+    private var draftDocumentId: String? = null
+
+    // The pending pages (with their keys), by page id. The ORDER is the one in uiState.pages.
+    private val preparedPages = mutableMapOf<String, PreparedPage>()
 
     // True once the user typed their own name, so changing the type no longer replaces it.
     private var nameEditedByUser = false
@@ -102,21 +115,58 @@ class AddDocumentViewModel(
     }
 
     /**
-     * Called with the file the user picked (or null if they backed out of the picker).
+     * Called with the files the user picked (empty if they backed out of the picker).
      *
-     * @param uri The picked file. Read once now; no long-term access is kept.
+     * @param uris The picked files. Each is read once now; no long-term access is kept.
      */
-    fun onFilePicked(uri: Uri?) {
-        if (uri == null) return
+    fun onFilesPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         // A picker can return after the vault locked (for example the screen turned off while it
-        // was open). The file must then not be read at all.
+        // was open). The files must then not be read at all.
         if (lockState.status.value == LockStatus.LOCKED) return
-        discardPickedFile()
-        mutableUiState.value = AddDocumentUiState(stage = AddStage.READING)
-        viewModelScope.launch {
-            val loaded = withContext(Dispatchers.IO) { loadPickedFile(uri) }
-            showLoadedFile(loaded)
-        }
+        val current = mutableUiState.value
+        if (current.stage != AddStage.CHOOSING && current.stage != AddStage.READY) return
+        val documentId = draftDocumentId ?: preparer.newDocumentId()
+        draftDocumentId = documentId
+        mutableUiState.value = current.copy(stage = AddStage.READING, errorMessage = null)
+        viewModelScope.launch { prepareAll(documentId, uris) }
+    }
+
+    /**
+     * Removes a page before saving (its pending file is deleted).
+     *
+     * @param pageId The page to remove.
+     */
+    fun onRemovePage(pageId: String) {
+        val current = mutableUiState.value
+        if (current.stage != AddStage.READY) return
+        val page = preparedPages.remove(pageId) ?: return
+        preparer.discard(listOf(page))
+        val remaining = current.pages.filter { draft -> draft.pageId != pageId }
+        val stage = if (remaining.isEmpty()) AddStage.CHOOSING else AddStage.READY
+        mutableUiState.value = current.copy(stage = stage, pages = remaining, errorMessage = null)
+    }
+
+    /**
+     * Moves a page one place towards the start.
+     *
+     * @param index The page's current place.
+     */
+    fun onMovePageUp(index: Int) {
+        val current = mutableUiState.value
+        if (current.stage != AddStage.READY) return
+        mutableUiState.value = current.copy(pages = movedUp(current.pages, index))
+    }
+
+    /**
+     * Moves a page one place towards the end.
+     *
+     * @param index The page's current place.
+     */
+    fun onMovePageDown(index: Int) {
+        val current = mutableUiState.value
+        if (current.stage != AddStage.READY) return
+        mutableUiState.value = current.copy(pages = movedDown(current.pages, index))
     }
 
     /**
@@ -141,36 +191,80 @@ class AddDocumentViewModel(
     }
 
     /**
-     * Saves the picked file. Asks "Confirm it's you" once if the unlock window has expired.
+     * Saves the pages as one document. Asks "Confirm it's you" once if the unlock window has expired.
      *
      * @param activity Shows the fingerprint/PIN prompt if needed.
      */
     fun onSaveClicked(activity: FragmentActivity) {
-        val file = pickedFile ?: return
+        val documentId = draftDocumentId ?: return
         val state = mutableUiState.value
         val type = state.documentType ?: return
         if (!state.canSave) return
+        val pagesInOrder = state.pages.mapNotNull { draft -> preparedPages[draft.pageId] }
         mutableUiState.value = state.copy(stage = AddStage.SAVING, errorMessage = null)
         val keyAccess = MasterKeyAccess(BiometricReAuthPrompt(activity, unlocker))
         viewModelScope.launch {
-            val outcome = saver.save(file, type, state.name, keyAccess)
+            val outcome = saver.save(documentId, pagesInOrder, type, state.name, keyAccess)
             showSaveOutcome(outcome)
         }
     }
 
     /** Called from "Cancel", "Done" and when leaving the screen: forget everything. */
     fun reset() {
-        discardPickedFile()
+        discardAllPages()
         nameEditedByUser = false
         mutableUiState.value = AddDocumentUiState()
     }
 
     override fun onCleared() {
-        discardPickedFile()
+        discardAllPages()
     }
 
-    /** Test hook: the picked file kept in memory (the real object, not a copy), or null. */
-    internal fun pickedFileForTest(): PickedFile? = pickedFile
+    /** Test hook: the ids of the pending pages this screen holds. */
+    internal fun pendingPageIdsForTest(): Set<String> = preparedPages.keys.toSet()
+
+    private suspend fun prepareAll(documentId: String, uris: List<Uri>) {
+        var lastFailure: AddDocumentFailure? = null
+        for (uri in uris) {
+            if (!isStillReading(documentId)) return
+            if (mutableUiState.value.pages.size >= MAX_PAGES_PER_DOCUMENT) {
+                lastFailure = AddDocumentFailure.TOO_MANY_PAGES
+                break
+            }
+            val result = preparer.prepare(documentId, uri)
+            if (!isStillReading(documentId)) {
+                // Locked or cancelled while preparing: nothing may be kept.
+                discardResult(result)
+                return
+            }
+            val failure = keepIfAllowed(result)
+            if (failure != null) lastFailure = failure
+        }
+        val current = mutableUiState.value
+        val stage = if (current.pages.isEmpty()) AddStage.CHOOSING else AddStage.READY
+        mutableUiState.value = current.copy(stage = stage, errorMessage = lastFailure?.message)
+    }
+
+    /** Adds a prepared page to the draft unless it breaks a limit. Returns the failure, if any. */
+    private fun keepIfAllowed(result: PrepareResult): AddDocumentFailure? {
+        if (result is PrepareResult.Failed) return result.failure
+        val prepared = result as PrepareResult.Prepared
+        val existingBytes = preparedPages.values.sumOf { page -> page.sizeBytes }
+        val problem = pageLimitProblem(preparedPages.size, existingBytes, listOf(prepared.page.sizeBytes))
+        if (problem != null) {
+            discardResult(prepared)
+            return failureForLimit(problem)
+        }
+        preparedPages[prepared.page.pageId] = prepared.page
+        val draft = DraftPage(prepared.page.pageId, prepared.thumbnail, prepared.isPdf)
+        val current = mutableUiState.value
+        mutableUiState.value = current.copy(pages = current.pages + draft)
+        return null
+    }
+
+    private fun isStillReading(documentId: String): Boolean {
+        return mutableUiState.value.stage == AddStage.READING && documentId == draftDocumentId
+    }
 
     private fun showSaveOutcome(outcome: SaveOutcome) {
         val current = mutableUiState.value
@@ -178,100 +272,29 @@ class AddDocumentViewModel(
         if (current.stage != AddStage.SAVING) return
         mutableUiState.value = when (outcome) {
             is SaveOutcome.Saved -> {
-                discardPickedFile()
-                current.copy(stage = AddStage.SAVED, preview = null)
+                // The pages are in the vault now; forget them without deleting anything.
+                preparedPages.clear()
+                draftDocumentId = null
+                current.copy(stage = AddStage.SAVED, pages = emptyList())
             }
             is SaveOutcome.NameRejected -> current.copy(stage = AddStage.READY, nameProblem = outcome.problem)
             is SaveOutcome.Failed -> current.copy(stage = AddStage.READY, errorMessage = outcome.failure.message)
         }
     }
 
-    private fun showLoadedFile(loaded: LoadResult) {
-        // The vault may have locked while reading; then the bytes must not be kept.
-        if (mutableUiState.value.stage != AddStage.READING) {
-            loaded.file?.wipe()
-            return
-        }
-        if (loaded.failure != null) {
-            mutableUiState.value = AddDocumentUiState(errorMessage = loaded.failure.message)
-            return
-        }
-        pickedFile = loaded.file
-        val type = mutableUiState.value.documentType
-        mutableUiState.value = AddDocumentUiState(
-            stage = AddStage.READY,
-            preview = loaded.preview,
-            isPdf = loaded.file?.type?.isImage == false,
-            documentType = type,
-        )
+    private fun discardResult(result: PrepareResult) {
+        val prepared = result as? PrepareResult.Prepared ?: return
+        preparer.discard(listOf(prepared.page))
     }
 
-    /** Reads, type-checks and previews the file. Wipes the bytes itself on any failure. */
-    private fun loadPickedFile(uri: Uri): LoadResult {
-        val contentResolver = appContext.contentResolver
-        val bytes = try {
-            readOnce(contentResolver, uri)
-        } catch (tooLarge: FileTooLargeException) {
-            return LoadResult.failed(AddDocumentFailure.TOO_LARGE)
-        } catch (unreadable: IOException) {
-            return LoadResult.failed(AddDocumentFailure.UNREADABLE_FILE)
-        } catch (unreadable: SecurityException) {
-            return LoadResult.failed(AddDocumentFailure.UNREADABLE_FILE)
-        }
-        val type = FileTypeDetector.detect(bytes)
-        if (type == null) {
-            bytes.fill(0)
-            return LoadResult.failed(AddDocumentFailure.WRONG_TYPE)
-        }
-        val file = PickedFile(bytes, type)
-        return buildPreview(contentResolver, uri, file)
-    }
-
-    private fun buildPreview(contentResolver: ContentResolver, uri: Uri, file: PickedFile): LoadResult {
-        if (!file.type.isImage) {
-            val pdfPreview = FilePreview.renderFirstPdfPage(contentResolver, uri)
-            return LoadResult(file = file, preview = pdfPreview, failure = null)
-        }
-        return try {
-            val imagePreview = FilePreview.decodeImage(file.bytes)
-            LoadResult(file = file, preview = imagePreview, failure = null)
-        } catch (damaged: DamagedImageException) {
-            file.wipe()
-            LoadResult.failed(AddDocumentFailure.DAMAGED_IMAGE)
-        }
-    }
-
-    private fun readOnce(contentResolver: ContentResolver, uri: Uri): ByteArray {
-        val sizeHint = reportedSize(contentResolver, uri)
-        val input = contentResolver.openInputStream(uri) ?: throw IOException("Picker gave no data")
-        input.use { stream ->
-            return PickedFileReader.readAll(stream, MAX_FILE_BYTES, sizeHint)
-        }
-    }
-
-    /** The size the picker reports. Only a hint for the buffer size; never trusted as a limit. */
-    private fun reportedSize(contentResolver: ContentResolver, uri: Uri): Long {
-        val columns = arrayOf(OpenableColumns.SIZE)
-        contentResolver.query(uri, columns, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst() && !cursor.isNull(0)) return cursor.getLong(0)
-        }
-        return 0L
+    private fun discardAllPages() {
+        preparer.discard(preparedPages.values.toList())
+        preparedPages.clear()
+        draftDocumentId = null
     }
 
     private fun problemIn(name: String): DisplayNameProblem? {
         val result = DisplayNameValidator.validate(name)
         return (result as? DisplayNameResult.Invalid)?.problem
-    }
-
-    private fun discardPickedFile() {
-        pickedFile?.wipe()
-        pickedFile = null
-    }
-
-    /** What loading a picked file produced: the file and preview, or a failure. */
-    private class LoadResult(val file: PickedFile?, val preview: Bitmap?, val failure: AddDocumentFailure?) {
-        companion object {
-            fun failed(failure: AddDocumentFailure) = LoadResult(file = null, preview = null, failure = failure)
-        }
     }
 }

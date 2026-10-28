@@ -12,6 +12,8 @@ import com.heybuddy.security.KeyWrapper
 import com.heybuddy.security.MasterKeyManager
 import com.heybuddy.security.VaultLockState
 import com.heybuddy.ui.VaultNavigator
+import com.heybuddy.ui.adddocument.AddDocumentSaver
+import com.heybuddy.ui.adddocument.PagePreparer
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -27,9 +29,13 @@ import java.io.File
  */
 class TestVault(private val context: Context, name: String, clock: () -> Long = { System.currentTimeMillis() }) {
 
-    private val databaseName = "vault_${name}_test.db"
+    /** The test database's file name. */
+    val databaseName = "vault_${name}_test.db"
+
     private val passphraseFile = File(context.noBackupFilesDir, "db_passphrase_${name}_test.bin")
-    private val masterKeyManager = MasterKeyManager(keyAlias = "hb_master_key_${name}_test", requireUserAuthentication = false)
+
+    /** The test master key (no fingerprint/PIN needed). */
+    val masterKeyManager = MasterKeyManager(keyAlias = "hb_master_key_${name}_test", requireUserAuthentication = false)
 
     /** Encrypted files folder. */
     val vaultDir = File(context.filesDir, "vault_${name}_test")
@@ -52,11 +58,31 @@ class TestVault(private val context: Context, name: String, clock: () -> Long = 
     /** Empties the test view folder. */
     val tempFileCleaner = TempFileCleaner(vaultDir, viewTempDir)
 
+    /** Gives the test database's passphrase. */
+    val keyProvider = DatabaseKeyProvider(keyWrapper, passphraseFile)
+
     /** The test database. */
-    val holder = VaultDatabaseHolder(context, lockState, DatabaseKeyProvider(keyWrapper, passphraseFile), databaseName)
+    val holder = VaultDatabaseHolder(context, lockState, keyProvider, databaseName)
 
     /** The test repository. */
     val repository = VaultRepository(holder, lockState, keyWrapper, fileCrypto, clock = clock)
+
+    /** Turns test files (content:// or file:// uris) into pending pages; storage is never "full". */
+    val pagePreparer = PagePreparer(context.contentResolver, repository, freeSpaceBytes = { Long.MAX_VALUE })
+
+    /** Saves pending pages. */
+    val saver = AddDocumentSaver(repository)
+
+    /**
+     * The encrypted files of a document's pages, in page order. The vault must be unlocked.
+     *
+     * @param documentId The document's id.
+     * @return vault/<pageId>.bin for each page.
+     */
+    fun pageFilesOf(documentId: String): List<File> {
+        val details = runBlocking { repository.documentDetails(documentId) }
+        return details.pages.map { page -> fileCrypto.encryptedFileFor(page.pageId) }
+    }
 
     /** Unlocks the test vault and waits until its database is ready. */
     fun unlock() {

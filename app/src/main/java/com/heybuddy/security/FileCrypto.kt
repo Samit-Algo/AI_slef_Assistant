@@ -8,6 +8,7 @@ import com.heybuddy.util.DECRYPTING_PART_SUFFIX
 import com.heybuddy.util.ENCRYPTED_FILE_SUFFIX
 import com.heybuddy.util.ENCRYPTING_TEMP_SUFFIX
 import com.heybuddy.util.MAX_FILE_BYTES
+import com.heybuddy.util.PENDING_PAGE_SUFFIX
 import com.heybuddy.util.STREAM_BUFFER_BYTES
 import java.io.File
 import java.io.FileInputStream
@@ -66,10 +67,10 @@ private class VerifiedBytesImpl(override val bytes: ByteArray) : VerifiedBytes()
 private class VerifiedFileImpl(override val file: File) : VerifiedFile()
 
 /**
- * Encrypts documents into the vault and decrypts them back (rules 3, 4 and 6).
+ * Encrypts pages into the vault and decrypts them back (rules 3, 4 and 6).
  *
- * Each file uses Tink streaming AEAD with the document's own key, and "document:<id>" as
- * associated data, so a file only opens for its own record.
+ * Each page file uses Tink streaming AEAD with the page's own key, and its [PageBinding] as
+ * associated data, so a file only opens as its own page of its own document.
  *
  * WHY DECRYPTION ONLY RETURNS VERIFIED DATA: streaming AEAD decrypts in 4 KB chunks. It can hand
  * out early chunks before it notices that a later chunk was changed, and it only notices a
@@ -77,7 +78,7 @@ private class VerifiedFileImpl(override val file: File) : VerifiedFile()
  * the last byte (including Tink's end-of-file check) and only then returns [VerifiedBytes] or
  * [VerifiedFile]. On any failure, everything decrypted so far is wiped or deleted.
  *
- * This class never touches the Keystore master key: it gets the already-unwrapped document key.
+ * This class never touches the Keystore master key: it gets the already-unwrapped page key.
  *
  * @param vaultDir The encrypted files folder (filesDir/vault in the app).
  * @param viewTempDir The only folder decrypted files may be written to (noBackupFilesDir/view_tmp).
@@ -88,29 +89,36 @@ class FileCrypto(
 ) {
 
     /**
-     * Encrypts a document into vault/<id>.bin while reading it. Plaintext never touches the disk.
+     * Encrypts a new page into vault/<pageId>.bin.pending while reading it (Task 1.10p).
+     * Plaintext never touches the disk.
      *
-     * Writes to <id>.bin.tmp first and renames only when encryption has finished, so a crash or
-     * error never leaves a half-written .bin. On any error the .tmp file is deleted.
+     * The page is not part of the vault yet: [commitPending] renames it to .bin when the document
+     * is saved. Writes to a .tmp file first and renames only when encryption has finished, so a
+     * crash never leaves a half-written page. On any error the .tmp file is deleted.
      *
-     * @param input The document's plaintext. Read once, not closed here (the caller owns it).
-     * @param documentKey The document's own key (from [KeyWrapper.generateDocumentKey]).
-     * @param documentId The document's id (a UUID).
+     * Only the current page format is accepted: every NEW page is bound to
+     * "document:<documentId>:page:<pageId>" (owner decision, Task 1.10p).
+     *
+     * @param input The page's plaintext. Read once, not closed here (the caller owns it).
+     * @param pageKey The page's own key (from [KeyWrapper.generatePageKey]).
+     * @param binding The new page's binding (from [PageBinding.forNewPage]).
      * @return The number of plaintext bytes encrypted (the real size, for the database).
+     * @throws IllegalArgumentException If [binding] is not the current format.
      * @throws com.heybuddy.files.FileTooLargeException If the input is over MAX_FILE_BYTES (rule 11).
-     * @throws IOException If <id>.bin already exists (never overwritten) or writing fails.
+     * @throws IOException If the page's .bin or .pending file already exists, or writing fails.
      */
-    fun encryptToVault(input: InputStream, documentKey: KeysetHandle, documentId: String): Long {
-        requireValidDocumentId(documentId)
-        val targetFile = encryptedFileFor(documentId)
-        if (targetFile.exists()) {
-            throw IOException("Encrypted file already exists; refusing to overwrite it")
+    fun encryptToPending(input: InputStream, pageKey: KeysetHandle, binding: PageBinding): Long {
+        require(binding.isCurrentFormat) { "New pages must use the current page format" }
+        val pendingFile = pendingFileFor(binding.pageId)
+        val committedFile = encryptedFileFor(binding.pageId)
+        if (pendingFile.exists() || committedFile.exists()) {
+            throw IOException("Page file already exists; refusing to overwrite it")
         }
         vaultDir.mkdirs()
-        val tempFile = File(vaultDir, targetFile.name + ENCRYPTING_TEMP_SUFFIX)
+        val tempFile = File(vaultDir, pendingFile.name + ENCRYPTING_TEMP_SUFFIX)
         try {
-            val plaintextSize = encryptToFile(input, documentKey, documentId, tempFile)
-            moveIntoPlace(tempFile, targetFile)
+            val plaintextSize = encryptToFile(input, pageKey, binding, tempFile)
+            moveIntoPlace(tempFile, pendingFile)
             return plaintextSize
         } catch (failure: Exception) {
             tempFile.delete()
@@ -119,25 +127,68 @@ class FileCrypto(
     }
 
     /**
-     * Decrypts a whole document into memory and returns it only after full verification.
+     * Makes a pending page part of the vault: renames <pageId>.bin.pending to <pageId>.bin.
+     * Call only together with writing the page's row (the repository does both under the database lock).
      *
-     * TODO(Task 1.8): when showing images, decode these bytes with downsampling to the screen
-     *  size (BitmapFactory inSampleSize), so a large photo cannot run the app out of memory.
+     * @param pageId The page's id.
+     * @throws IOException If the pending file is missing, the .bin already exists, or the rename fails.
+     */
+    fun commitPending(pageId: String) {
+        val pendingFile = pendingFileFor(pageId)
+        val committedFile = encryptedFileFor(pageId)
+        if (!pendingFile.exists()) throw FileNotFoundException("Pending page is missing")
+        if (committedFile.exists()) throw IOException("Page file already exists; refusing to overwrite it")
+        moveIntoPlace(pendingFile, committedFile)
+    }
+
+    /**
+     * Undoes [commitPending] when the database step that followed it failed, so the user can try
+     * saving again. If it cannot be moved back, it is deleted (its key was never stored).
      *
-     * @param documentId The document's id.
-     * @param documentKey The document's own key.
+     * @param pageId The page's id.
+     */
+    fun returnToPending(pageId: String) {
+        val committedFile = encryptedFileFor(pageId)
+        val movedBack = committedFile.renameTo(pendingFileFor(pageId))
+        if (!movedBack) committedFile.delete()
+    }
+
+    /**
+     * Deletes a pending page (cancel, page removed on the Add screen, or lock).
+     * Never touches a saved .bin file.
+     *
+     * @param pageId The page's id.
+     */
+    fun deletePending(pageId: String) {
+        pendingFileFor(pageId).delete()
+    }
+
+    /**
+     * Where a page waits until its document is saved.
+     *
+     * @param pageId The page's id (a UUID).
+     * @return vault/<pageId>.bin.pending (it may not exist).
+     */
+    fun pendingFileFor(pageId: String): File {
+        return File(vaultDir, encryptedFileFor(pageId).name + PENDING_PAGE_SUFFIX)
+    }
+
+    /**
+     * Decrypts a whole page into memory and returns it only after full verification.
+     *
+     * @param binding The page's binding (its file and associated data).
+     * @param pageKey The page's own key.
      * @return The verified plaintext.
-     * @throws FileNotFoundException If the document has no encrypted file.
+     * @throws FileNotFoundException If the page has no encrypted file.
      * @throws DocumentUnreadableException If the file fails verification in any way.
      */
-    fun decryptVerified(documentId: String, documentKey: KeysetHandle): VerifiedBytes {
-        requireValidDocumentId(documentId)
-        val sourceFile = requireEncryptedFile(documentId)
+    fun decryptVerified(binding: PageBinding, pageKey: KeysetHandle): VerifiedBytes {
+        val sourceFile = requireEncryptedFile(binding.pageId)
         requirePlausibleSize(sourceFile)
         // Plaintext is always shorter than its ciphertext, so the file size is a safe buffer size.
         val capacity = sourceFile.length().toInt()
         try {
-            val plaintext = decryptIntoMemory(sourceFile, documentKey, documentId, capacity)
+            val plaintext = decryptIntoMemory(sourceFile, pageKey, binding, capacity)
             return VerifiedBytesImpl(plaintext)
         } catch (failure: IOException) {
             throw DocumentUnreadableException(failure)
@@ -147,27 +198,26 @@ class FileCrypto(
     }
 
     /**
-     * Decrypts a document into a file in view_tmp, and makes it visible only after full verification.
+     * Decrypts a page into a file in view_tmp, and makes it visible only after full verification.
      *
      * Writes to <destination>.part and renames it only when the whole file has been verified.
      * On failure the .part file is deleted, so unverified plaintext never stays on disk.
      *
-     * @param documentId The document's id.
-     * @param documentKey The document's own key.
+     * @param binding The page's binding (its file and associated data).
+     * @param pageKey The page's own key.
      * @param destination Where the verified file should appear. Must be directly inside view_tmp.
      * @return The verified file.
      * @throws IllegalArgumentException If [destination] is not directly inside view_tmp.
-     * @throws FileNotFoundException If the document has no encrypted file.
+     * @throws FileNotFoundException If the page has no encrypted file.
      * @throws DocumentUnreadableException If the file fails verification in any way.
      */
-    fun decryptVerifiedToFile(documentId: String, documentKey: KeysetHandle, destination: File): VerifiedFile {
-        requireValidDocumentId(documentId)
+    fun decryptVerifiedToFile(binding: PageBinding, pageKey: KeysetHandle, destination: File): VerifiedFile {
         requireInsideViewTemp(destination)
-        val sourceFile = requireEncryptedFile(documentId)
+        val sourceFile = requireEncryptedFile(binding.pageId)
         viewTempDir.mkdirs()
         val partFile = File(destination.path + DECRYPTING_PART_SUFFIX)
         try {
-            decryptIntoFile(sourceFile, documentKey, documentId, partFile)
+            decryptIntoFile(sourceFile, pageKey, binding, partFile)
             moveIntoPlace(partFile, destination)
             return VerifiedFileImpl(destination)
         } catch (failure: IOException) {
@@ -192,14 +242,14 @@ class FileCrypto(
     }
 
     /**
-     * Where a document's encrypted file lives.
+     * Where a saved page's encrypted file lives.
      *
-     * @param documentId The document's id (a UUID).
-     * @return vault/<id>.bin (it may not exist yet).
+     * @param pageId The page's id (a UUID).
+     * @return vault/<pageId>.bin (it may not exist).
      */
-    fun encryptedFileFor(documentId: String): File {
-        requireValidDocumentId(documentId)
-        return File(vaultDir, documentId + ENCRYPTED_FILE_SUFFIX)
+    fun encryptedFileFor(pageId: String): File {
+        requireValidId(pageId)
+        return File(vaultDir, pageId + ENCRYPTED_FILE_SUFFIX)
     }
 
     /**
@@ -216,9 +266,9 @@ class FileCrypto(
         return names
     }
 
-    private fun encryptToFile(input: InputStream, documentKey: KeysetHandle, documentId: String, file: File): Long {
-        val streamingAead = streamingAeadFor(documentKey)
-        val associatedData = documentAssociatedData(documentId)
+    private fun encryptToFile(input: InputStream, pageKey: KeysetHandle, binding: PageBinding, file: File): Long {
+        val streamingAead = streamingAeadFor(pageKey)
+        val associatedData = binding.associatedData()
         val limitedInput = SizeLimitedInputStream(input, MAX_FILE_BYTES)
         // Tink's close() writes the final chunk and closes the file stream, which syncs first.
         val fileOutput = SyncOnCloseOutputStream(FileOutputStream(file))
@@ -228,9 +278,9 @@ class FileCrypto(
         return limitedInput.bytesRead
     }
 
-    private fun decryptIntoMemory(file: File, documentKey: KeysetHandle, documentId: String, capacity: Int): ByteArray {
-        val streamingAead = streamingAeadFor(documentKey)
-        val associatedData = documentAssociatedData(documentId)
+    private fun decryptIntoMemory(file: File, pageKey: KeysetHandle, binding: PageBinding, capacity: Int): ByteArray {
+        val streamingAead = streamingAeadFor(pageKey)
+        val associatedData = binding.associatedData()
         FileInputStream(file).use { fileInput ->
             streamingAead.newDecryptingStream(fileInput, associatedData).use { decrypting ->
                 return readToVerifiedEnd(decrypting, capacity)
@@ -238,9 +288,9 @@ class FileCrypto(
         }
     }
 
-    private fun decryptIntoFile(source: File, documentKey: KeysetHandle, documentId: String, target: File) {
-        val streamingAead = streamingAeadFor(documentKey)
-        val associatedData = documentAssociatedData(documentId)
+    private fun decryptIntoFile(source: File, pageKey: KeysetHandle, binding: PageBinding, target: File) {
+        val streamingAead = streamingAeadFor(pageKey)
+        val associatedData = binding.associatedData()
         FileInputStream(source).use { fileInput ->
             streamingAead.newDecryptingStream(fileInput, associatedData).use { decrypting ->
                 // Also guards against a huge file swapped into the vault.
@@ -291,8 +341,8 @@ class FileCrypto(
         }
     }
 
-    private fun streamingAeadFor(documentKey: KeysetHandle): StreamingAead {
-        return documentKey.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
+    private fun streamingAeadFor(pageKey: KeysetHandle): StreamingAead {
+        return pageKey.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
     }
 
     private fun moveIntoPlace(from: File, to: File) {
@@ -303,8 +353,8 @@ class FileCrypto(
         }
     }
 
-    private fun requireEncryptedFile(documentId: String): File {
-        val sourceFile = encryptedFileFor(documentId)
+    private fun requireEncryptedFile(pageId: String): File {
+        val sourceFile = encryptedFileFor(pageId)
         if (!sourceFile.exists()) {
             throw FileNotFoundException("Encrypted file is missing")
         }
@@ -328,13 +378,13 @@ class FileCrypto(
     }
 
     // The id becomes part of a file path, so it must be a plain UUID (no "../" or slashes).
-    private fun requireValidDocumentId(documentId: String) {
+    private fun requireValidId(pageId: String) {
         val parsed = try {
-            UUID.fromString(documentId)
+            UUID.fromString(pageId)
         } catch (notAUuid: IllegalArgumentException) {
-            throw IllegalArgumentException("Document id must be a UUID", notAUuid)
+            throw IllegalArgumentException("Page id must be a UUID", notAUuid)
         }
-        require(parsed.toString() == documentId) { "Document id must be a UUID in standard lowercase form" }
+        require(parsed.toString() == pageId) { "Page id must be a UUID in standard lowercase form" }
     }
 
     private companion object {

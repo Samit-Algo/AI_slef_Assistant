@@ -48,6 +48,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    sourceSets {
+        // The migration test (Task 1.10p) builds a version-1 database from app/schemas/.../1.json.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+
     buildFeatures {
         compose = true
         // SafeLog reads BuildConfig.DEBUG so it can stay silent in release builds.

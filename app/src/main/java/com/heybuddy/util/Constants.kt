@@ -68,7 +68,7 @@ const val VAULT_FOLDER_NAME: String = "vault"
 /** Folder inside noBackupFilesDir for decrypted PDFs while they are viewed (rule 6). Emptied on every app start. */
 const val VIEW_TEMP_FOLDER_NAME: String = "view_tmp"
 
-/** Ending of an encrypted document file: vault/<id>.bin. */
+/** Ending of an encrypted page file: vault/<pageId>.bin. */
 const val ENCRYPTED_FILE_SUFFIX: String = ".bin"
 
 /** Ending of a file still being encrypted. Renamed to .bin only when encryption finished. */
@@ -88,12 +88,6 @@ const val VAULT_DATABASE_NAME: String = "vault.db"
  * "Aadhaar card - front (2024)" are well under half of this.
  */
 const val MAX_DISPLAY_NAME_CHARACTERS: Int = 60
-
-/**
- * Longest side of a preview image, in pixels. Sharp on a phone screen, but small enough that a
- * large photo (for example 4000 x 3000) never needs much memory to preview.
- */
-const val PREVIEW_MAX_PIXELS: Int = 1600
 
 /** Most the viewer zooms in (owner decision, Task 1.8b). */
 const val VIEWER_MAX_ZOOM: Float = 4f
@@ -115,3 +109,37 @@ private const val BYTES_PER_MEGABYTE: Long = 1024L * 1024L
 
 /** Largest file the vault accepts (rule 11). Big enough for a scanned PDF, small enough to keep the phone fast. */
 const val MAX_FILE_BYTES: Long = 20L * BYTES_PER_MEGABYTE
+
+/**
+ * Most pages one document may have (owner decision, Task 1.10p). Covers front and back, passport
+ * pages and multi-page certificates, while keeping one document quick to open.
+ */
+const val MAX_PAGES_PER_DOCUMENT: Int = 10
+
+/** Largest total size of all pages of one document (owner decision, Task 1.10p). Each page still obeys MAX_FILE_BYTES. */
+const val MAX_DOCUMENT_BYTES: Long = 50L * BYTES_PER_MEGABYTE
+
+/**
+ * Ending of a page that is encrypted but not saved yet (Add screen, Task 1.10p). Renamed to .bin
+ * only when the document is saved; deleted on cancel, on lock and on every app start.
+ */
+const val PENDING_PAGE_SUFFIX: String = ".pending"
+
+/**
+ * Page format 1: a document from before Task 1.10p, made into a one-page document by the database
+ * migration. Its key and file stay bound to "document:<id>", and its page id equals the document id.
+ * Only migrated pages may use it; new pages never do.
+ */
+const val PAGE_FORMAT_LEGACY: Int = 1
+
+/** Page format 2: key and file bound to "document:<documentId>:page:<pageId>". Every new page uses it. */
+const val PAGE_FORMAT_CURRENT: Int = 2
+
+/** Middle part of a format-2 page's associated data: "document:<documentId>" + this + "<pageId>". */
+const val PAGE_ASSOCIATED_DATA_INFIX: String = ":page:"
+
+/**
+ * Longest side of a page thumbnail on the Add screen, in pixels. Small, because up to
+ * MAX_PAGES_PER_DOCUMENT of them stay in memory at once (about 0.6 MB each at most).
+ */
+const val THUMBNAIL_MAX_PIXELS: Int = 384

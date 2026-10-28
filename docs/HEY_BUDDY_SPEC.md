@@ -103,20 +103,37 @@ A **locker inside a locker**:
 **Document types (enum `DocumentType`):** `AADHAAR`, `PAN`, `DRIVING_LICENCE`, `PASSPORT`, `PHOTO`,
 `SIGNATURE`, `CERTIFICATE`, `OTHER`.
 
-**Table `documents` (Room database, encrypted with SQLCipher):**
+Room database (encrypted with SQLCipher), **version 2** since Task 1.10p. Version 1 had one file per
+document; the real migration `MIGRATION_1_2` turned every old document into a one-page document
+without re-encrypting anything (no destructive migration, ever).
+
+**Table `documents`:**
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `id` | String (UUID) | Primary key; also used as encryption "associated data" |
+| `id` | String (UUID) | Primary key; part of every page's associated data |
 | `displayName` | String | User-editable name, e.g. "My Aadhaar" |
 | `type` | String (`DocumentType`) | Chosen by the user |
-| `mimeType` | String | Detected from file bytes, not from the file name |
-| `sizeBytes` | Long | Size of the original (plaintext) file |
-| `wrappedKey` | ByteArray | This document's key, encrypted by the master key |
 | `createdAt` | Long (epoch ms) | |
 | `updatedAt` | Long (epoch ms) | |
 
-**Encrypted file location:** `filesDir/vault/<id>.bin` (app-private storage only, never external storage).
+**Table `document_pages`** (Task 1.10p, owner decision: each page is its own encrypted file):
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `pageId` | String (UUID) | Primary key; also the file name |
+| `documentId` | String | The document (foreign key, deleted with it) |
+| `position` | Int | Page order 0, 1, 2… with no gaps; unique per document. The order lives only here, in the encrypted database |
+| `mimeType` | String | Detected from file bytes, not from the file name |
+| `sizeBytes` | Long | Size of the original (plaintext) file |
+| `wrappedKey` | ByteArray | This page's key, encrypted by the master key |
+| `formatVersion` | Int | 2 = bound to `document:<documentId>:page:<pageId>` (every new page); 1 = migrated old document, still bound to `document:<id>`, with page id = document id |
+
+**Limits (owner decision, Task 1.10p):** at most 10 pages and 50 MB per document; each page at most 20 MB (rule 11).
+
+**Encrypted file location:** `filesDir/vault/<pageId>.bin` (app-private storage only, never external
+storage). A page picked on the Add screen waits as `<pageId>.bin.pending` until Save; pending files
+are deleted on cancel, on lock and on every app start.
 
 ### 5.5 Security rules (must all be true at the end of Phase 1)
 
@@ -132,10 +149,15 @@ A **locker inside a locker**:
      background, screen off, idle) is the **main** protection; this key window is a **second layer**
      that limits the key even if the app lock were bypassed. The window is fixed when a key is created.
    - Key can never leave the Keystore.
-3. **One key per document.** Each document gets its own random Tink keyset (streaming AEAD,
-   `AES256_GCM_HKDF_4KB`), wrapped (encrypted) with the master key and stored in `wrappedKey`.
-4. **Bind file to its record.** Use the document `id` as associated data, so an encrypted file
-   cannot be swapped into another record without failing to decrypt.
+3. **One key per page.** Each page (a one-page document has one) gets its own random Tink keyset
+   (streaming AEAD, `AES256_GCM_HKDF_4KB`), wrapped (encrypted) with the master key and stored in
+   its `wrappedKey`. (Task 1.10p: was "one key per document" while every document had one file.)
+4. **Bind file to its record.** Every new page's key and file use
+   `document:<documentId>:page:<pageId>` as associated data, so a page file cannot be swapped with
+   another page or moved to another document without failing to decrypt. Owner decision (Task 1.10p):
+   bound by page **id**, not page number; the order is protected by the encrypted database, so
+   reordering or removing a page never re-encrypts anything. Only pages migrated from version 1
+   keep the old `document:<id>` label.
 5. **Database is encrypted.** Room + SQLCipher. The database passphrase is 32 random bytes,
    stored only in wrapped form (wrapped by the master key) in app-private storage.
 6. **Never write plaintext to permanent storage.** Encrypt while reading the input stream.
@@ -158,8 +180,9 @@ A **locker inside a locker**:
     JPEG, PNG, WEBP, PDF only. Reject anything else with a clear message.
 12. **No personal data in logs.** Never log file names, document names or contents.
     Use a small `SafeLog` wrapper that only logs in debug builds and only fixed messages.
-13. **Delete = crypto-shred.** Deleting a document deletes its `.bin` file and its
-    `wrappedKey` row. "Delete everything" also deletes the Keystore master key, the
+13. **Delete = crypto-shred.** Deleting a document deletes all its page rows (with their
+    `wrappedKey`s, in one transaction) and then their `.bin` files; removing one page does the same
+    for that page. "Delete everything" also deletes the Keystore master key, the
     database and the vault folder.
 14. **Key invalidated** (for example, the user removed their screen lock): catch
     `KeyPermanentlyInvalidatedException`, explain clearly that the vault cannot be
@@ -245,7 +268,7 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | **1.8b Vault list + viewer** | List screen (document cards per 5.14), image viewer, PDF viewer with temp-file rules (rule 6), `TempFileCleaner`; viewer menu: Rename only (Delete is Task 1.10) | Viewing works; `view_tmp` is empty after closing and after restart |
 | **1.9 Lock + safety** | Auto-lock (rule 9), FLAG_SECURE (rule 8), key-invalidated handling (rule 14). **Note:** the file pickers and the fingerprint/PIN prompt open other screens, which briefly puts Hey Buddy in the background; auto-lock must NOT lock the vault during these | Leaving the app locks it; screenshot is black; removing screen lock shows recovery screen |
 | **1.10 Delete + settings + onboarding** | Delete one, Delete everything (rule 13), Settings screen, Onboarding screen (5.6). Also: a theme choice in Settings — "Follow phone" (default), "Light", "Dark". It is not secret, so it is stored outside the vault in normal app preferences, so the Unlock screen can use it too. Also: clean up orphan `.bin` files (a `.bin` with no row, left by a crash). **Note:** this cleanup must only run while no save is in progress, using the same database lock (`VaultDatabaseHolder.withDatabase`), because during a save a `.bin` exists briefly before its row | After "Delete everything": no files, no DB, no Keystore key; onboarding shows on first start and again after "Delete everything" |
-| **1.10p Multi-page documents** | Owner request (found in the Task 1.10 test: Aadhaar front and back could not be one document). One document holds several ordered pages; **owner decision: each page is its own encrypted file** (not combined into one PDF). Needs a real database migration from version 1 to 2 (no destructive migration) with a migration test; per-page associated data binding document id AND page number; Add screen with several pages, reorder and remove before saving; viewer swipes between pages and can add/remove a page; delete order, crash safety and orphan cleanup for page files. Plan to be approved by the owner before coding | Aadhaar front + back saved as one document, viewed page by page; old single-file documents still open after the migration; all tests pass |
+| **1.10p Multi-page documents** | Owner request (found in the Task 1.10 test: Aadhaar front and back could not be one document). One document holds several ordered pages; **owner decision: each page is its own encrypted file** (not combined into one PDF). Needs a real database migration from version 1 to 2 (no destructive migration) with a migration test; per-page associated data binding document id AND page id (**owner decision at plan approval: page id, not page number**; the order lives in the encrypted database; every new page uses `document:<documentId>:page:<pageId>`, only migrated pages keep `document:<id>`); limits 10 pages and 50 MB per document (owner decision); Add screen with several pages, reorder and remove before saving; viewer swipes between pages and can add/remove a page; delete order, crash safety and orphan cleanup for page files. Plan to be approved by the owner before coding | Aadhaar front + back saved as one document, viewed page by page; old single-file documents still open after the migration; all tests pass |
 | **1.10m Motion upgrade** | Owner request (split from 1.10). First propose a "Motion" section for 5.14 and get approval, then implement on all screens: (1) shared element transition: a document card grows into the viewer and back (Compose `SharedTransitionLayout`, stable in Compose 1.12.1); (2) Unlock: the lock shackle springs open on success, the icon shakes gently on failure, light haptic on both; (3) spring physics: buttons and cards press down slightly when tapped, the "+" button and dialogs open with a soft spring; (4) predictive back (Android 14+): `enableOnBackInvokedCallback` in the manifest, supported in `VaultNavigator`; (5) staggered card appearance on the vault list, first appearance only; (6) shimmer skeleton instead of a plain spinner for "Opening…" and while saving; (7) onboarding: cards slide with subtle parallax, hero icons have a small looping animation, page dots animate between pages; (8) success moment after saving and renaming: a self-drawing check mark plus a light haptic; (9) Settings: smooth expand/collapse, and the theme change cross-fades instead of flashing. **Motion rules:** only Compose's built-in animation APIs and animated vector drawables, no animation library (no Lottie) without asking; locking is ALWAYS instant and no animation may delay hiding documents; respect "Remove animations" everywhere; smooth on the owner's phone with no dropped frames (quick performance check, report any stutter); every animation 150–400 ms; calm and premium, no cartoon bounces or flashy effects, every animation has a purpose. Deliverables: all tests pass, screenshots, a short `adb screenrecord` video of the main flows using the screenshot test window only (FLAG_SECURE off only there, sample data only) | Owner approves the Motion section, the video and the manual test; no dropped frames reported |
 | **1.11 Phase review** | Run all tests, write `docs/PHASE1_REPORT.md` listing each rule in 5.5 and how it is met. **Reminder:** remind the owner to delete the `Download/HeyBuddyTest/` sample-files folder on the test phone, and ask before deleting it; also remind the owner that battery optimisation was turned off for Hey Buddy on the test phone for testing (Task 1.10), and offer to turn it back on | Owner approves the report |
 
@@ -272,14 +295,14 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | --- | --- | --- | --- |
 | Fingerprint unlock: NOT TESTED YET | 1.3 | Owner's test phone has no working fingerprint sensor | In Task 1.11, on the Android emulator with a virtual fingerprint: unlock with fingerprint and confirm "Vault unlocked" in logcat |
 | Wrong-finger lockout message: NOT TESTED YET | 1.3 | Same as above | In Task 1.11, on the emulator: use a wrong virtual finger until lockout; confirm "Fingerprint lockout" in logcat, the "too many tries" message on screen, and that PIN still unlocks |
-| Tink unwrap after the key window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error. The test uses a 30-second test key (the app key is 5 minutes) | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
+| Tink unwrap after the key window: NOT TESTED YET | 1.4 | The one real run was spoiled by a PIN unlock during the wait; owner chose to move on. Expiry itself is proven (Task 1.2) and the cause-chain check is proven with a fake error. The test uses a 30-second test key (the app key is 5 minutes). Task 1.10p full run (143/145): both tests failed again only because the phone had not been unlocked with PIN in the last few seconds ("unlock window was already closed"); owner decision: close it in Task 1.11 | In Task 1.11: unlock, run `AuthRequiredKeyWrapTest`, do not touch the phone for 40 seconds; both tests must pass |
 | **HIGHEST PRIORITY** — `fake_pdf.pdf` (text renamed to .pdf) is rejected: NOT TESTED YET on the phone | 1.7 | Owner approved Task 1.7 after testing one image and one PDF. Covered by automated tests (`FileTypeDetectorTest`), not yet by hand | In Task 1.11, with the files in `Download/HeyBuddyTest/`: pick it; expect "Hey Buddy can only store photos (JPEG, PNG, WEBP) and PDF files…" and the document count unchanged |
 | **HIGHEST PRIORITY** — `broken_photo.jpg` (right first bytes, damaged after) is rejected: NOT TESTED YET | 1.7 | Same as above. No automated test decodes a real damaged image | In Task 1.11: pick it; expect "This image seems to be damaged…" and the count unchanged |
 | **HIGHEST PRIORITY** — `too_large.jpg` (21,000,000 bytes) is rejected: NOT TESTED YET on the phone | 1.7 | Same as above. Size limit covered by automated tests (`PickedFileReaderTest`, `FileCryptoTest`), not yet through the picker | In Task 1.11: pick it; expect "This file is larger than 20 MB…" and the count unchanged |
 | `sample_photo.png` and `sample_photo.webp` save correctly: NOT TESTED YET | 1.7 | Owner tested one image (JPEG) and one PDF only | In Task 1.11: add both; each shows a preview, saves, and the count goes up by 1 |
 | Check A (cancel): cancelling "Confirm it's you" when saving: NOT TESTED YET by hand | 1.7 | The confirm path was seen working on the phone (log shows the re-ask twice, both saves went through). The cancel path is covered by an automated test (`AddDocumentSaverTest`) only | In Task 1.11: unlock, keep using the app (touch the screen at least once a minute so the idle lock does not trigger) for more than 5 minutes, tap Save, cancel the prompt; expect "Please confirm it's you to save. Tap Save to try again." and the count unchanged |
 | Check B: name rules on the Add screen: NOT TESTED YET by hand | 1.7 | Rules are covered by automated tests (`DisplayNameValidatorTest`); the screen behaviour is not | In Task 1.11: clear the name (message shows, Save greyed out); type your own name, then change the type (your name stays) |
-| Check C: "Choose a photo" opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose a photo"; the photo picker opens with no permission question |
+| Check C: "Choose photos" (called "Choose a photo" before Task 1.10p) opens the system photo picker with no permission question: NOT TESTED YET | 1.7 | Owner tested through the picker but did not report which button | In Task 1.11: tap "Choose photos"; the photo picker opens with no permission question |
 | Keyboard does not cover the Name field or the Save button (Add screen): NOT TESTED YET | 1.8a | Owner skipped this check; the screenshot test cannot open the keyboard | In Task 1.11: on the Add screen with a picked file, tap Name; the field and "Save to vault" must stay visible (or reachable by scrolling) above the keyboard |
 | Home-screen app icon looks right: NOT TESTED YET | 1.8a | Owner skipped this check. App info showed the themed (one-colour) icon correctly | In Task 1.11: check the icon on the home screen, with themed icons both on and off if the phone allows |
 | Back on each screen (viewer → list, Add → list, Rename dialog → closes only the dialog, list → leaves the app): NOT TESTED YET by hand | 1.8b | Owner confirmed list, open, rename and zoom, but not Back. Covered by automated tests (`VaultNavigatorTest`, `ViewerViewModelTest`) | In Task 1.11: try Back on each screen and with the Rename dialog open |
@@ -288,6 +311,7 @@ Use the latest stable versions at the time of building; confirm with the owner i
 | Keyboard in the Rename dialog does not hide the name field or Save: NOT TESTED YET | 1.8b | Not explicitly confirmed | In Task 1.11: open Rename, tap the field; the field and Save must stay visible above the keyboard |
 | "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
 | Predictive back preview: NOT TESTED YET | 1.10m | The back-swipe preview only exists on Android 14+; the owner's phone runs Android 13 | In Task 1.11, on the Android 14+ emulator: swipe back slowly on the viewer, Add and Settings screens; a preview of the previous screen must show, and cancelling the swipe stays on the screen |
+| `SecureWindowTest.ourOwnPickerDoesNotLockTheVault` was flaky once: RECHECK | 1.10 | One full run (100 of 101 passed) failed it with "Activity never becomes requested state RESUMED" while the phone was freezing and unfreezing test processes (battery optimisation). It passed 3 of 3 times on its own | Owner decision: recheck in the Task 1.11 full run, AFTER battery optimisation is turned back on for Hey Buddy; it must pass |
 | Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | In Task 1.11: switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
 
 ### 5.14 UI design system — APPROVED by owner (2026-10-27)

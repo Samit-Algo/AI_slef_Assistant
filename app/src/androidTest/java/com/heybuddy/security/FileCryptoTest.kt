@@ -7,6 +7,7 @@ import com.google.crypto.tink.RegistryConfiguration
 import com.google.crypto.tink.StreamingAead
 import com.heybuddy.files.FileTooLargeException
 import com.heybuddy.util.MAX_FILE_BYTES
+import com.heybuddy.util.PAGE_FORMAT_LEGACY
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -20,12 +21,14 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.util.UUID
 import kotlin.random.Random
 
 /**
- * Checks [FileCrypto] on a real phone (rules 3, 4, 6 and 11).
+ * Checks [FileCrypto] on a real phone (rules 3, 4, 6 and 11), with page bindings (Task 1.10p).
  *
- * Needs no Keystore key: FileCrypto only uses document keys, which the tests create directly.
+ * Needs no Keystore key: FileCrypto only uses page keys, which the tests create directly.
  * Uses its own test folders, deleted after every test even when it fails.
  */
 @RunWith(AndroidJUnit4::class)
@@ -36,7 +39,7 @@ class FileCryptoTest {
     private val viewTempDir = File(context.noBackupFilesDir, "view_tmp_test")
     private val fileCrypto = FileCrypto(vaultDir, viewTempDir)
 
-    // generateDocumentKey never touches the Keystore, so this alias is never created.
+    // generatePageKey never touches the Keystore, so this alias is never created.
     private val keyWrapper = KeyWrapper(MasterKeyManager(keyAlias = "not_used_by_file_tests"))
 
     @Before
@@ -54,11 +57,11 @@ class FileCryptoTest {
         val sizes = listOf(0, 1, TINK_SEGMENT_BYTES, TINK_SEGMENT_BYTES + 1, THREE_MEGABYTES)
         for (size in sizes) {
             val plaintext = Random(seed = size).nextBytes(size)
-            val documentId = newDocumentId()
-            val key = keyWrapper.generateDocumentKey()
+            val binding = newBinding()
+            val key = keyWrapper.generatePageKey()
 
-            val reportedSize = fileCrypto.encryptToVault(ByteArrayInputStream(plaintext), key, documentId)
-            val decrypted = fileCrypto.decryptVerified(documentId, key)
+            val reportedSize = encryptAndCommit(ByteArrayInputStream(plaintext), key, binding)
+            val decrypted = fileCrypto.decryptVerified(binding, key)
 
             assertEquals("size $size", size.toLong(), reportedSize)
             assertArrayEquals("size $size", plaintext, decrypted.bytes)
@@ -67,28 +70,28 @@ class FileCryptoTest {
 
     @Test
     fun exactlyTheLimitIsAcceptedAndOneMoreIsRejected() {
-        val key = keyWrapper.generateDocumentKey()
-        val atLimitId = newDocumentId()
-        val overLimitId = newDocumentId()
+        val key = keyWrapper.generatePageKey()
+        val atLimit = newBinding()
+        val overLimit = newBinding()
 
-        val acceptedSize = fileCrypto.encryptToVault(GeneratedInputStream(MAX_FILE_BYTES), key, atLimitId)
+        val acceptedSize = encryptAndCommit(GeneratedInputStream(MAX_FILE_BYTES), key, atLimit)
 
         assertEquals(MAX_FILE_BYTES, acceptedSize)
         assertThrows(FileTooLargeException::class.java) {
-            fileCrypto.encryptToVault(GeneratedInputStream(MAX_FILE_BYTES + 1), key, overLimitId)
+            fileCrypto.encryptToPending(GeneratedInputStream(MAX_FILE_BYTES + 1), key, overLimit)
         }
-        assertNoFilesFor(overLimitId)
+        assertNoFilesFor(overLimit.pageId)
     }
 
     @Test
     fun oneChangedByteInTheMiddleFails() {
-        val (documentId, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
-        val encryptedFile = fileCrypto.encryptedFileFor(documentId)
+        val (binding, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
+        val encryptedFile = fileCrypto.encryptedFileFor(binding.pageId)
 
         changeByteAt(encryptedFile, encryptedFile.length() / 2)
 
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(documentId, key)
+            fileCrypto.decryptVerified(binding, key)
         }
     }
 
@@ -98,53 +101,65 @@ class FileCryptoTest {
      */
     @Test
     fun changedLastChunkReturnsNoDataAtAll() {
-        val (documentId, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
-        val encryptedFile = fileCrypto.encryptedFileFor(documentId)
+        val (binding, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
+        val encryptedFile = fileCrypto.encryptedFileFor(binding.pageId)
         changeByteAt(encryptedFile, encryptedFile.length() - 10)
 
-        val bytesFromRawStream = countBytesBeforeFailure(encryptedFile, key, documentId)
+        val bytesFromRawStream = countBytesBeforeFailure(encryptedFile, key, binding)
 
         assertTrue("Raw stream should leak early chunks", bytesFromRawStream > 0)
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(documentId, key)
+            fileCrypto.decryptVerified(binding, key)
         }
     }
 
     @Test
     fun cutOffFileFails() {
-        val (documentId, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
-        val encryptedFile = fileCrypto.encryptedFileFor(documentId)
+        val (binding, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
+        val encryptedFile = fileCrypto.encryptedFileFor(binding.pageId)
         val fullBytes = encryptedFile.readBytes()
 
         encryptedFile.writeBytes(fullBytes.copyOf(fullBytes.size - 1))
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(documentId, key)
+            fileCrypto.decryptVerified(binding, key)
         }
 
         encryptedFile.writeBytes(fullBytes.copyOf(fullBytes.size / 2))
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(documentId, key)
+            fileCrypto.decryptVerified(binding, key)
         }
     }
 
     @Test
-    fun wrongDocumentIdFails() {
-        val (documentId, key) = encryptSample(sizeBytes = SMALL_BYTES)
-        val otherId = newDocumentId()
-        // Put the file under the other id's name, keeping the right key: only the id differs.
-        fileCrypto.encryptedFileFor(documentId).renameTo(fileCrypto.encryptedFileFor(otherId))
+    fun pageFileUnderAnotherPageIdFails() {
+        val (binding, key) = encryptSample(sizeBytes = SMALL_BYTES)
+        val otherPage = PageBinding.forNewPage(binding.documentId, newId())
+        // Put the file under the other page's name, keeping the right key: only the page id differs.
+        fileCrypto.encryptedFileFor(binding.pageId).renameTo(fileCrypto.encryptedFileFor(otherPage.pageId))
 
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(otherId, key)
+            fileCrypto.decryptVerified(otherPage, key)
         }
     }
 
     @Test
-    fun swappedFilesBothFailToOpen() {
-        val (firstId, firstKey) = encryptSample(sizeBytes = SMALL_BYTES)
-        val (secondId, secondKey) = encryptSample(sizeBytes = SMALL_BYTES)
-        val firstFile = fileCrypto.encryptedFileFor(firstId)
-        val secondFile = fileCrypto.encryptedFileFor(secondId)
+    fun pageMovedToAnotherDocumentFails() {
+        val (binding, key) = encryptSample(sizeBytes = SMALL_BYTES)
+        // Same page id and key, but claimed by a different document.
+        val sameIdOtherDocument = PageBinding.forNewPage(newId(), binding.pageId)
+
+        assertThrows(DocumentUnreadableException::class.java) {
+            fileCrypto.decryptVerified(sameIdOtherDocument, key)
+        }
+    }
+
+    @Test
+    fun swappedPagesOfOneDocumentBothFailToOpen() {
+        val documentId = newId()
+        val (firstPage, firstKey) = encryptSample(sizeBytes = SMALL_BYTES, documentId = documentId)
+        val (secondPage, secondKey) = encryptSample(sizeBytes = SMALL_BYTES, documentId = documentId)
+        val firstFile = fileCrypto.encryptedFileFor(firstPage.pageId)
+        val secondFile = fileCrypto.encryptedFileFor(secondPage.pageId)
         val firstBytes = firstFile.readBytes()
         val secondBytes = secondFile.readBytes()
 
@@ -152,70 +167,137 @@ class FileCryptoTest {
         secondFile.writeBytes(firstBytes)
 
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(firstId, firstKey)
+            fileCrypto.decryptVerified(firstPage, firstKey)
         }
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerified(secondId, secondKey)
+            fileCrypto.decryptVerified(secondPage, secondKey)
         }
+    }
+
+    /** A page from before Task 1.10p opens with its old "document:<id>" binding, and only with that. */
+    @Test
+    fun legacyPageOpensOnlyWithTheLegacyBinding() {
+        val documentId = newId()
+        val key = keyWrapper.generatePageKey()
+        val plaintext = Random(seed = 3).nextBytes(SMALL_BYTES)
+        writeLegacyFile(documentId, key, plaintext)
+        val legacy = PageBinding.forStoredPage(documentId, documentId, PAGE_FORMAT_LEGACY)
+        val currentFormat = PageBinding.forNewPage(documentId, documentId)
+
+        assertArrayEquals(plaintext, fileCrypto.decryptVerified(legacy, key).bytes)
+        assertThrows(DocumentUnreadableException::class.java) {
+            fileCrypto.decryptVerified(currentFormat, key)
+        }
+    }
+
+    /** Owner rule (Task 1.10p): new pages always use the new binding, never the old one. */
+    @Test
+    fun newPagesCannotBeWrittenWithTheLegacyBinding() {
+        val documentId = newId()
+        val legacy = PageBinding.forStoredPage(documentId, documentId, PAGE_FORMAT_LEGACY)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            fileCrypto.encryptToPending(ByteArrayInputStream(ByteArray(1)), keyWrapper.generatePageKey(), legacy)
+        }
+        assertNoFilesFor(documentId)
+    }
+
+    @Test
+    fun pendingPageIsNotInTheVaultUntilCommitted() {
+        val binding = newBinding()
+        val key = keyWrapper.generatePageKey()
+
+        fileCrypto.encryptToPending(ByteArrayInputStream(ByteArray(SMALL_BYTES)), key, binding)
+
+        assertTrue(fileCrypto.pendingFileFor(binding.pageId).exists())
+        assertFalse(fileCrypto.encryptedFileFor(binding.pageId).exists())
+        assertFalse("a pending page is not a vault file", fileCrypto.vaultFileNames().contains("${binding.pageId}.bin"))
+
+        fileCrypto.commitPending(binding.pageId)
+
+        assertFalse(fileCrypto.pendingFileFor(binding.pageId).exists())
+        assertTrue(fileCrypto.encryptedFileFor(binding.pageId).exists())
+    }
+
+    @Test
+    fun returnToPendingUndoesACommit() {
+        val (binding, key) = encryptSample(sizeBytes = SMALL_BYTES)
+
+        fileCrypto.returnToPending(binding.pageId)
+
+        assertFalse(fileCrypto.encryptedFileFor(binding.pageId).exists())
+        assertTrue(fileCrypto.pendingFileFor(binding.pageId).exists())
+        fileCrypto.commitPending(binding.pageId)
+        assertEquals(SMALL_BYTES, fileCrypto.decryptVerified(binding, key).bytes.size)
+    }
+
+    @Test
+    fun deletePendingNeverTouchesASavedPage() {
+        val (binding, key) = encryptSample(sizeBytes = SMALL_BYTES)
+
+        fileCrypto.deletePending(binding.pageId)
+
+        assertEquals(SMALL_BYTES, fileCrypto.decryptVerified(binding, key).bytes.size)
     }
 
     @Test
     fun encryptedFileDoesNotContainAKnownPattern() {
         val pattern = "HEY-BUDDY-KNOWN-PATTERN".toByteArray(Charsets.UTF_8)
         val plaintext = ByteArray(SIXTY_FOUR_KILOBYTES) { index -> pattern[index % pattern.size] }
-        val documentId = newDocumentId()
-        val key = keyWrapper.generateDocumentKey()
+        val binding = newBinding()
+        val key = keyWrapper.generatePageKey()
 
-        fileCrypto.encryptToVault(ByteArrayInputStream(plaintext), key, documentId)
-        val encryptedBytes = fileCrypto.encryptedFileFor(documentId).readBytes()
+        encryptAndCommit(ByteArrayInputStream(plaintext), key, binding)
+        val encryptedBytes = fileCrypto.encryptedFileFor(binding.pageId).readBytes()
 
         assertFalse(containsSequence(encryptedBytes, pattern))
     }
 
     @Test
     fun errorDuringEncryptionLeavesNoFilesBehind() {
-        val documentId = newDocumentId()
-        val key = keyWrapper.generateDocumentKey()
+        val binding = newBinding()
+        val key = keyWrapper.generatePageKey()
 
         assertThrows(IOException::class.java) {
-            fileCrypto.encryptToVault(FailingInputStream(goodBytes = TEN_KILOBYTES), key, documentId)
+            fileCrypto.encryptToPending(FailingInputStream(goodBytes = TEN_KILOBYTES), key, binding)
         }
-        assertNoFilesFor(documentId)
+        assertNoFilesFor(binding.pageId)
     }
 
     @Test
-    fun existingEncryptedFileIsNeverOverwritten() {
+    fun existingPageFileIsNeverOverwritten() {
         val plaintext = Random(seed = 1).nextBytes(SMALL_BYTES)
-        val documentId = newDocumentId()
-        val key = keyWrapper.generateDocumentKey()
-        fileCrypto.encryptToVault(ByteArrayInputStream(plaintext), key, documentId)
+        val binding = newBinding()
+        val key = keyWrapper.generatePageKey()
+        encryptAndCommit(ByteArrayInputStream(plaintext), key, binding)
 
         assertThrows(IOException::class.java) {
-            fileCrypto.encryptToVault(ByteArrayInputStream(ByteArray(SMALL_BYTES)), key, documentId)
+            fileCrypto.encryptToPending(ByteArrayInputStream(ByteArray(SMALL_BYTES)), key, binding)
         }
-        assertArrayEquals(plaintext, fileCrypto.decryptVerified(documentId, key).bytes)
+        assertArrayEquals(plaintext, fileCrypto.decryptVerified(binding, key).bytes)
     }
 
     @Test
-    fun invalidDocumentIdIsRejected() {
-        val key = keyWrapper.generateDocumentKey()
-
+    fun invalidIdsAreRejected() {
         assertThrows(IllegalArgumentException::class.java) {
-            fileCrypto.encryptToVault(ByteArrayInputStream(ByteArray(1)), key, "../evil")
+            PageBinding.forNewPage(newId(), "../evil")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            fileCrypto.encryptedFileFor("../evil")
         }
     }
 
     @Test
     fun decryptToFileOnlyWritesInsideViewTemp() {
-        val (documentId, key) = encryptSample(sizeBytes = SMALL_BYTES)
+        val (binding, key) = encryptSample(sizeBytes = SMALL_BYTES)
         val outsideFolder = File(context.filesDir, "outside.pdf")
         val sneakyPath = File(viewTempDir, "../outside.pdf")
 
         assertThrows(IllegalArgumentException::class.java) {
-            fileCrypto.decryptVerifiedToFile(documentId, key, outsideFolder)
+            fileCrypto.decryptVerifiedToFile(binding, key, outsideFolder)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            fileCrypto.decryptVerifiedToFile(documentId, key, sneakyPath)
+            fileCrypto.decryptVerifiedToFile(binding, key, sneakyPath)
         }
         assertFalse(outsideFolder.exists())
     }
@@ -223,12 +305,12 @@ class FileCryptoTest {
     @Test
     fun decryptToFileGivesTheVerifiedFile() {
         val plaintext = Random(seed = 2).nextBytes(THREE_MEGABYTES)
-        val documentId = newDocumentId()
-        val key = keyWrapper.generateDocumentKey()
-        fileCrypto.encryptToVault(ByteArrayInputStream(plaintext), key, documentId)
+        val binding = newBinding()
+        val key = keyWrapper.generatePageKey()
+        encryptAndCommit(ByteArrayInputStream(plaintext), key, binding)
         val destination = File(viewTempDir, "view.pdf")
 
-        val verifiedFile = fileCrypto.decryptVerifiedToFile(documentId, key, destination)
+        val verifiedFile = fileCrypto.decryptVerifiedToFile(binding, key, destination)
 
         assertArrayEquals(plaintext, verifiedFile.file.readBytes())
         assertFalse(partFileFor(destination).exists())
@@ -236,30 +318,46 @@ class FileCryptoTest {
 
     @Test
     fun tamperedDecryptToFileLeavesNoPlaintextFile() {
-        val (documentId, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
-        val encryptedFile = fileCrypto.encryptedFileFor(documentId)
+        val (binding, key) = encryptSample(sizeBytes = THREE_MEGABYTES)
+        val encryptedFile = fileCrypto.encryptedFileFor(binding.pageId)
         changeByteAt(encryptedFile, encryptedFile.length() - 10)
         val destination = File(viewTempDir, "view.pdf")
 
         assertThrows(DocumentUnreadableException::class.java) {
-            fileCrypto.decryptVerifiedToFile(documentId, key, destination)
+            fileCrypto.decryptVerifiedToFile(binding, key, destination)
         }
         assertFalse(destination.exists())
         assertFalse(partFileFor(destination).exists())
     }
 
-    private fun encryptSample(sizeBytes: Int): Pair<String, KeysetHandle> {
+    private fun encryptAndCommit(input: InputStream, key: KeysetHandle, binding: PageBinding): Long {
+        val size = fileCrypto.encryptToPending(input, key, binding)
+        fileCrypto.commitPending(binding.pageId)
+        return size
+    }
+
+    private fun encryptSample(sizeBytes: Int, documentId: String = newId()): Pair<PageBinding, KeysetHandle> {
         val plaintext = Random(seed = sizeBytes).nextBytes(sizeBytes)
-        val documentId = newDocumentId()
-        val key = keyWrapper.generateDocumentKey()
-        fileCrypto.encryptToVault(ByteArrayInputStream(plaintext), key, documentId)
-        return Pair(documentId, key)
+        val binding = PageBinding.forNewPage(documentId, newId())
+        val key = keyWrapper.generatePageKey()
+        encryptAndCommit(ByteArrayInputStream(plaintext), key, binding)
+        return Pair(binding, key)
+    }
+
+    /** Writes a page exactly as the app did before Task 1.10p: vault/<id>.bin bound to "document:<id>". */
+    private fun writeLegacyFile(documentId: String, key: KeysetHandle, plaintext: ByteArray) {
+        val streamingAead = key.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
+        val associatedData = "document:$documentId".toByteArray(Charsets.UTF_8)
+        vaultDir.mkdirs()
+        fileCrypto.encryptedFileFor(documentId).outputStream().use { fileOutput ->
+            streamingAead.newEncryptingStream(fileOutput, associatedData).use { encrypting -> encrypting.write(plaintext) }
+        }
     }
 
     /** Reads with Tink's raw stream (as a careless caller would) and counts bytes before it fails. */
-    private fun countBytesBeforeFailure(encryptedFile: File, key: KeysetHandle, documentId: String): Long {
+    private fun countBytesBeforeFailure(encryptedFile: File, key: KeysetHandle, binding: PageBinding): Long {
         val streamingAead = key.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
-        val associatedData = documentAssociatedData(documentId)
+        val associatedData = binding.associatedData()
         var count = 0L
         val buffer = ByteArray(TINK_SEGMENT_BYTES)
         try {
@@ -285,16 +383,19 @@ class FileCryptoTest {
         file.writeBytes(bytes)
     }
 
-    private fun assertNoFilesFor(documentId: String) {
-        val encryptedFile = fileCrypto.encryptedFileFor(documentId)
-        val tempFile = File(encryptedFile.path + ".tmp")
+    private fun assertNoFilesFor(pageId: String) {
+        val encryptedFile = fileCrypto.encryptedFileFor(pageId)
+        val pendingFile = fileCrypto.pendingFileFor(pageId)
         assertFalse("no .bin expected", encryptedFile.exists())
-        assertFalse("no .tmp expected", tempFile.exists())
+        assertFalse("no .pending expected", pendingFile.exists())
+        assertFalse("no .tmp expected", File(pendingFile.path + ".tmp").exists())
     }
 
     private fun partFileFor(destination: File): File = File(destination.path + ".part")
 
-    private fun newDocumentId(): String = java.util.UUID.randomUUID().toString()
+    private fun newId(): String = UUID.randomUUID().toString()
+
+    private fun newBinding(): PageBinding = PageBinding.forNewPage(newId(), newId())
 
     private fun containsSequence(haystack: ByteArray, needle: ByteArray): Boolean {
         val lastStart = haystack.size - needle.size

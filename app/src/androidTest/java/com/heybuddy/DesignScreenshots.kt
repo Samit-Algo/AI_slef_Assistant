@@ -16,10 +16,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.heybuddy.data.DisplayNameProblem
 import com.heybuddy.data.DocumentType
+import com.heybuddy.ui.adddocument.AddDocumentActions
 import com.heybuddy.ui.adddocument.AddDocumentFailure
 import com.heybuddy.ui.adddocument.AddDocumentScreen
 import com.heybuddy.ui.adddocument.AddDocumentUiState
 import com.heybuddy.ui.adddocument.AddStage
+import com.heybuddy.ui.adddocument.DraftPage
 import com.heybuddy.ui.adddocument.labelFor
 import com.heybuddy.ui.components.BannerKind
 import com.heybuddy.ui.components.DocumentCard
@@ -53,6 +55,8 @@ import com.heybuddy.ui.viewer.ViewerActions
 import com.heybuddy.ui.viewer.ViewerScreen
 import com.heybuddy.ui.viewer.ViewerStage
 import com.heybuddy.ui.viewer.ViewerUiState
+import com.heybuddy.util.MAX_PAGES_PER_DOCUMENT
+import com.heybuddy.util.THUMBNAIL_MAX_PIXELS
 import kotlinx.coroutines.runBlocking
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -86,10 +90,10 @@ class DesignScreenshots {
             "04_no_screen_lock" to { NoScreenLockScreen() },
             "06_add_choose" to { AddScreenSample(AddDocumentUiState()) },
             "07_add_ready" to {
-                AddScreenSample(AddDocumentUiState(stage = AddStage.READY, preview = samplePreview, documentType = DocumentType.PHOTO, name = "Sample photo"))
+                AddScreenSample(AddDocumentUiState(stage = AddStage.READY, pages = samplePages(samplePreview, 1), documentType = DocumentType.PHOTO, name = "Sample photo"))
             },
             "08_add_ready_name_error" to {
-                AddScreenSample(AddDocumentUiState(stage = AddStage.READY, preview = samplePreview, documentType = DocumentType.PHOTO, name = "", nameProblem = DisplayNameProblem.EMPTY))
+                AddScreenSample(AddDocumentUiState(stage = AddStage.READY, pages = samplePages(samplePreview, 1), documentType = DocumentType.PHOTO, name = "", nameProblem = DisplayNameProblem.EMPTY))
             },
             "09_add_wrong_type" to { AddScreenSample(AddDocumentUiState(errorMessage = AddDocumentFailure.WRONG_TYPE.message)) },
             "10_add_saving" to { AddScreenSample(AddDocumentUiState(stage = AddStage.SAVING)) },
@@ -107,10 +111,11 @@ class DesignScreenshots {
         folder.mkdirs()
         val samplePhoto = drawSamplePreview()
         val samplePdfPage = renderSamplePdfPage(pageIndex = 1)
-        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", picture = samplePhoto)
+        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", documentPageCount = 1, picture = samplePhoto)
         val viewingPdf = ViewerUiState(
             stage = ViewerStage.READY,
             title = "Sample certificate",
+            documentPageCount = 1,
             isPdf = true,
             picture = samplePdfPage,
             pageIndex = 1,
@@ -149,7 +154,7 @@ class DesignScreenshots {
         val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_1_10")
         folder.deleteRecursively()
         folder.mkdirs()
-        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", picture = drawSamplePreview())
+        val viewingPhoto = ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", documentPageCount = 1, picture = drawSamplePreview())
         val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
             "01_onboarding_card1" to { OnboardingScreen(onFinished = {}) },
             "02_onboarding_card2" to { OnboardingScreen(onFinished = {}, initialPage = 1) },
@@ -163,6 +168,58 @@ class DesignScreenshots {
             "09_licence_text" to { LicenceTextScreen(entry = LicenceEntry.SQLCIPHER, onBack = {}) },
             "10_viewer_delete_dialog" to { ViewerScreen(viewingPhoto.copy(deleteConfirmOpen = true), noViewerActions()) },
             "11_viewer_deleting" to { ViewerScreen(ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", deleting = true), noViewerActions()) },
+        )
+        captureAll(folder, screens)
+    }
+
+    /** Task 1.10p: documents with several pages, with fake sample pages only. */
+    @Test
+    fun captureMultiPageScreens() {
+        val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_1_10p")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        val front = drawSampleCard(Color.rgb(30, 90, 160), "SAMPLE FRONT")
+        val back = drawSampleCard(Color.rgb(90, 100, 110), "SAMPLE BACK")
+        val threePages = listOf(
+            DraftPage("page-1", thumbnailOf(front), isPdf = false),
+            DraftPage("page-2", thumbnailOf(back), isPdf = false),
+            DraftPage("page-3", thumbnail = null, isPdf = true),
+        )
+        val tenPages = List(MAX_PAGES_PER_DOCUMENT) { index -> DraftPage("page-$index", thumbnailOf(front), isPdf = false) }
+        val viewingBack = ViewerUiState(
+            stage = ViewerStage.READY,
+            title = "Aadhaar card",
+            documentPageCount = 2,
+            documentPageIndex = 1,
+            picture = back,
+        )
+        val viewingPdfPage = ViewerUiState(
+            stage = ViewerStage.READY,
+            title = "Sample certificate",
+            documentPageCount = 3,
+            documentPageIndex = 2,
+            isPdf = true,
+            picture = renderSamplePdfPage(pageIndex = 1),
+            pageIndex = 1,
+            pageCount = 2,
+        )
+        val ready = AddDocumentUiState(stage = AddStage.READY, pages = threePages, documentType = DocumentType.AADHAAR, name = "Aadhaar card")
+        val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "01_add_choose" to { AddScreenSample(AddDocumentUiState()) },
+            "02_add_three_pages" to { AddScreenSample(ready) },
+            "03_add_ten_pages_limit" to {
+                AddScreenSample(ready.copy(pages = tenPages, errorMessage = AddDocumentFailure.TOO_MANY_PAGES.message))
+            },
+            "04_add_reading" to { AddScreenSample(AddDocumentUiState(stage = AddStage.READING)) },
+            "05_list_with_page_count" to { VaultListScreen(documents = sampleDocuments(), onOpenDocument = {}, onAddDocument = {}) },
+            "06_viewer_page_2_of_2" to { ViewerScreen(viewingBack, noViewerActions()) },
+            "07_viewer_pdf_inside_3_pages" to { ViewerScreen(viewingPdfPage, noViewerActions()) },
+            "08_viewer_add_page_choice" to { ViewerScreen(viewingBack.copy(addPageChoiceOpen = true), noViewerActions()) },
+            "09_viewer_remove_page_dialog" to { ViewerScreen(viewingBack.copy(removePageConfirmOpen = true), noViewerActions()) },
+            "10_viewer_adding_pages" to { ViewerScreen(viewingBack.copy(picture = null, addingPages = true), noViewerActions()) },
+            "11_viewer_limit_notice" to {
+                ViewerScreen(viewingBack.copy(documentPageCount = MAX_PAGES_PER_DOCUMENT, notice = AddDocumentFailure.TOO_MANY_PAGES.message), noViewerActions())
+            },
         )
         captureAll(folder, screens)
     }
@@ -191,9 +248,9 @@ class DesignScreenshots {
     private fun sampleDocuments(): List<DocumentSummary> {
         val added = ZonedDateTime.of(2026, 10, 27, 17, 0, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
         return listOf(
-            DocumentSummary("a", "Sample photo (WEBP)", DocumentType.PHOTO, "image/webp", 8_754, added, added),
-            DocumentSummary("b", "Sample certificate", DocumentType.CERTIFICATE, "application/pdf", 82_960, added, added),
-            DocumentSummary("c", "Sample photo", DocumentType.PHOTO, "image/jpeg", 47_749, added, added),
+            DocumentSummary("a", "Sample Aadhaar card", DocumentType.AADHAAR, pageCount = 2, createdAt = added, updatedAt = added),
+            DocumentSummary("b", "Sample certificate", DocumentType.CERTIFICATE, pageCount = 1, createdAt = added, updatedAt = added),
+            DocumentSummary("c", "Sample photo", DocumentType.PHOTO, pageCount = 1, createdAt = added, updatedAt = added),
         )
     }
 
@@ -212,7 +269,7 @@ class DesignScreenshots {
 
     @Composable
     private fun AddScreenSample(state: AddDocumentUiState) {
-        AddDocumentScreen(uiState = state, onFilePicked = {}, onTypeChosen = {}, onNameChanged = {}, onSaveClick = {}, onClose = {})
+        AddDocumentScreen(uiState = state, actions = AddDocumentActions({}, {}, {}, {}, {}, {}, {}, {}))
     }
 
     private fun capture(folder: File, fileName: String, dark: Boolean, screen: @Composable () -> Unit) {
@@ -237,17 +294,30 @@ class DesignScreenshots {
     }
 
     /** A fake photo for the preview: plain shapes and "HEY BUDDY SAMPLE", nothing personal. */
-    private fun drawSamplePreview(): Bitmap {
+    private fun drawSamplePreview(): Bitmap = drawSampleCard(Color.rgb(30, 90, 160), "HEY BUDDY SAMPLE")
+
+    /** A fake card-shaped picture with a label, nothing personal. */
+    private fun drawSampleCard(background: Int, label: String): Bitmap {
         val bitmap = Bitmap.createBitmap(1200, 800, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.rgb(30, 90, 160))
+        canvas.drawColor(background)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.rgb(255, 200, 0)
         canvas.drawCircle(350f, 400f, 150f, paint)
         paint.color = Color.WHITE
         paint.textSize = 64f
-        canvas.drawText("HEY BUDDY SAMPLE", 560f, 420f, paint)
+        canvas.drawText(label, 560f, 420f, paint)
         return bitmap
+    }
+
+    /** A thumbnail the size the Add screen really uses. */
+    private fun thumbnailOf(picture: Bitmap): Bitmap {
+        val scale = THUMBNAIL_MAX_PIXELS.toFloat() / maxOf(picture.width, picture.height)
+        return Bitmap.createScaledBitmap(picture, (picture.width * scale).toInt(), (picture.height * scale).toInt(), true)
+    }
+
+    private fun samplePages(picture: Bitmap, count: Int): List<DraftPage> {
+        return List(count) { index -> DraftPage("page-$index", thumbnailOf(picture), isPdf = false) }
     }
 
     private companion object {

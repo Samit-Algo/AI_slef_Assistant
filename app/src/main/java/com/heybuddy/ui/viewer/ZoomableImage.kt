@@ -3,7 +3,10 @@ package com.heybuddy.ui.viewer
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -18,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
@@ -28,7 +32,8 @@ private const val DOUBLE_TAP_ZOOM = 2.5f
 
 /**
  * A picture you can pinch to zoom (1x to 4x), drag while zoomed, and double tap to zoom in or out.
- * Dragging stops at the picture's edges, so it can never be pushed off screen.
+ * Dragging stops at the picture's edges, so it can never be pushed off screen. At normal size a
+ * one-finger drag is left to the parent (the viewer's page swiper).
  *
  * @param picture The photo or PDF page.
  * @param contentDescription What TalkBack says for the picture.
@@ -46,10 +51,22 @@ fun ZoomableImage(picture: Bitmap, contentDescription: String, modifier: Modifie
             .fillMaxSize()
             .onSizeChanged { size -> areaSize = size }
             .pointerInput(picture) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(1f, VIEWER_MAX_ZOOM)
-                    scale = newScale
-                    offset = clampOffset(offset + pan, newScale, areaSize)
+                // Not detectTransformGestures: that one takes EVERY drag, so swiping to the next
+                // page (Task 1.10p) would never work. Here a one-finger drag at normal size is left
+                // for the page swiper; pinching, or dragging while zoomed in, is used here.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        if (event.changes.any { change -> change.isConsumed }) break
+                        val pinching = event.changes.count { change -> change.pressed } > 1
+                        if (pinching || scale > 1f) {
+                            val newScale = (scale * event.calculateZoom()).coerceIn(1f, VIEWER_MAX_ZOOM)
+                            scale = newScale
+                            offset = clampOffset(offset + event.calculatePan(), newScale, areaSize)
+                            event.changes.forEach { change -> if (change.positionChanged()) change.consume() }
+                        }
+                    } while (event.changes.any { change -> change.pressed })
                 }
             }
             .pointerInput(picture) {

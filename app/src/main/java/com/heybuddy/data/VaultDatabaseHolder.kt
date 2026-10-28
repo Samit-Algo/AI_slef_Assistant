@@ -137,6 +137,8 @@ class VaultDatabaseHolder(
         val factory = SupportOpenHelperFactory(passphraseCopy)
         val database = Room.databaseBuilder(appContext, VaultDatabase::class.java, databaseName)
             .openHelperFactory(factory)
+            // Real migrations only, never a destructive fallback (see VaultDatabase).
+            .addMigrations(*VaultDatabase.ALL_MIGRATIONS)
             .build()
         try {
             // Room opens lazily; open now so a wrong passphrase fails here, not in a later query.

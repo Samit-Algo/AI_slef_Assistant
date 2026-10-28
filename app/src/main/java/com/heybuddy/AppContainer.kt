@@ -21,6 +21,7 @@ import com.heybuddy.settings.SharedPreferencesStore
 import com.heybuddy.ui.AutoLockController
 import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ui.adddocument.AddDocumentSaver
+import com.heybuddy.ui.adddocument.PagePreparer
 import com.heybuddy.util.DB_PASSPHRASE_FILE_NAME
 import com.heybuddy.util.LogEvent
 import com.heybuddy.util.SETTINGS_FILE_NAME
@@ -130,8 +131,11 @@ class AppContainer(private val appContext: Context) {
     /** Which vault screen is showing; back to the list on every lock and unlock (memory only). */
     val vaultNavigator: VaultNavigator = VaultNavigator(vaultLockState)
 
-    /** Saves picked files into the vault. */
-    val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository, ::freeSpaceForVault)
+    /** Turns picked files into pending (encrypted, not yet saved) pages. */
+    val pagePreparer: PagePreparer = PagePreparer(appContext.contentResolver, vaultRepository, ::freeSpaceForVault)
+
+    /** Saves pending pages as a new document, or adds them to an existing one. */
+    val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository)
 
     // For app-wide background work that must not depend on any screen (orphan cleanup).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

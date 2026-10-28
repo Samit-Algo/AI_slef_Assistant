@@ -42,6 +42,20 @@ class TempFileCleanerTest {
         assertTrue(finished.exists())
     }
 
+    /** Pages picked but never saved (Task 1.10p): their keys were only in memory, so they must go. */
+    @Test
+    fun deletesPendingPagesButKeepsSavedPages() {
+        val pending = createFile(vaultDir, "cccc.bin.pending")
+        val unfinishedPending = createFile(vaultDir, "dddd.bin.pending.tmp")
+        val saved = createFile(vaultDir, "eeee.bin")
+
+        cleaner.cleanOnStart()
+
+        assertFalse(pending.exists())
+        assertFalse(unfinishedPending.exists())
+        assertTrue(saved.exists())
+    }
+
     @Test
     fun deletesLeftoverPartFilesInViewTemp() {
         val leftoverPart = createFile(viewTempDir, "view.pdf.part")
