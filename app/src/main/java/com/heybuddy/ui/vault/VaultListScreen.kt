@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,8 +45,11 @@ import androidx.compose.ui.unit.dp
 import com.heybuddy.R
 import com.heybuddy.data.DocumentSummary
 import com.heybuddy.ui.adddocument.labelFor
+import com.heybuddy.ui.documentCard
 import com.heybuddy.ui.components.DocumentCard
 import com.heybuddy.ui.components.EmptyState
+import com.heybuddy.ui.components.popIn
+import com.heybuddy.ui.components.pressScale
 import com.heybuddy.ui.theme.Dimens
 import com.heybuddy.ui.theme.LocalReduceMotion
 import com.heybuddy.ui.theme.MotionDurations
@@ -73,6 +77,8 @@ private val SpaceForAddButton = 88.dp
  * @param onOpenDocument Called with a document's id when its card is tapped.
  * @param onAddDocument Called when "+" is tapped.
  * @param onOpenSettings Called when the settings button is tapped.
+ * @param shownCards Documents whose card has already appeared. Kept by the caller, so returning
+ *   from the viewer does not animate the cards again (first appearance only, spec 5.14 item 5).
  */
 @Composable
 fun VaultListScreen(
@@ -80,6 +86,7 @@ fun VaultListScreen(
     onOpenDocument: (String) -> Unit,
     onAddDocument: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    shownCards: MutableSet<String> = remember { mutableSetOf() },
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -89,18 +96,22 @@ fun VaultListScreen(
         if (documents.isEmpty()) {
             EmptyVault(innerPadding, onOpenSettings)
         } else {
-            DocumentList(documents, innerPadding, onOpenDocument, onOpenSettings)
+            DocumentList(documents, innerPadding, onOpenDocument, onOpenSettings, shownCards)
         }
     }
 }
 
 @Composable
 private fun AddButton(onAddDocument: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
     FloatingActionButton(
         onClick = onAddDocument,
         shape = CircleShape,
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary,
+        interactionSource = interactionSource,
+        // Opens with a soft spring, and sinks slightly while pressed (spec 5.14, item 3).
+        modifier = Modifier.popIn().pressScale(interactionSource),
     ) {
         Icon(painter = painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.add_document_button))
     }
@@ -138,9 +149,9 @@ private fun DocumentList(
     innerPadding: PaddingValues,
     onOpenDocument: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    alreadyShown: MutableSet<String>,
 ) {
-    // Cards already shown once do not animate again (for example when scrolling back up).
-    val alreadyShown = remember { mutableSetOf<String>() }
+    // Cards already shown once do not animate again (scrolling back up, or back from the viewer).
     val layoutDirection = LocalLayoutDirection.current
     val listPadding = PaddingValues(
         start = innerPadding.calculateStartPadding(layoutDirection) + Dimens.ScreenPadding,
@@ -239,6 +250,8 @@ private fun DocumentCardFor(document: DocumentSummary, onOpenDocument: (String) 
         typeLabel = stringResource(labelFor(document.type)),
         addedText = addedText,
         onClick = { onOpenDocument(document.id) },
+        // The viewer grows out of this card when it opens (spec 5.14, item 1).
+        modifier = Modifier.documentCard(document.id),
     )
 }
 

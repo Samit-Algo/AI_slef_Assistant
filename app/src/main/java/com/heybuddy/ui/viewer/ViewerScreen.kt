@@ -58,10 +58,16 @@ import com.heybuddy.ui.components.LocalObscuredTouchReporter
 import com.heybuddy.ui.components.MessageBanner
 import com.heybuddy.ui.components.PrimaryButton
 import com.heybuddy.ui.components.SecondaryButton
+import com.heybuddy.ui.components.SuccessNotice
+import com.heybuddy.ui.components.popIn
 import com.heybuddy.ui.components.rejectObscuredTouches
 import com.heybuddy.ui.theme.Dimens
 import com.heybuddy.ui.theme.LocalReduceMotion
 import com.heybuddy.util.MAX_PAGES_PER_DOCUMENT
+import kotlinx.coroutines.delay
+
+/** How long "Name changed" / "Page added" stays: long enough to read, short enough not to clutter. */
+private const val SUCCESS_NOTICE_MILLIS = 2_000L
 
 /** Every type the file picker may offer; the real type is checked from the bytes afterwards. */
 private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { type -> type.mimeType }.toTypedArray()
@@ -88,6 +94,7 @@ private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { 
  * @property onRemovePageConfirm Remove confirmed in "Remove this page?".
  * @property onRemovePageDismiss Cancel (or Back) in "Remove this page?".
  * @property onBeforeExternalScreen Called right before a picker opens (one-time auto-lock pass, rule 9).
+ * @property onSuccessNoticeShown The success message has been on screen long enough.
  */
 class ViewerActions(
     val onBack: () -> Unit,
@@ -109,6 +116,7 @@ class ViewerActions(
     val onRemovePageConfirm: () -> Unit = {},
     val onRemovePageDismiss: () -> Unit = {},
     val onBeforeExternalScreen: () -> Unit = {},
+    val onSuccessNoticeShown: () -> Unit = {},
 )
 
 /**
@@ -117,10 +125,12 @@ class ViewerActions(
  *
  * @param uiState What to show.
  * @param actions What happens on each tap.
+ * @param modifier Layout changes from the caller (the app links the viewer to its list card here).
  */
 @Composable
-fun ViewerScreen(uiState: ViewerUiState, actions: ViewerActions) {
+fun ViewerScreen(uiState: ViewerUiState, actions: ViewerActions, modifier: Modifier = Modifier) {
     Scaffold(
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = { ViewerTopBar(uiState, actions) },
@@ -139,6 +149,17 @@ fun ViewerScreen(uiState: ViewerUiState, actions: ViewerActions) {
                     kind = BannerKind.ERROR,
                     modifier = Modifier.padding(horizontal = Dimens.ScreenPadding, vertical = Dimens.SpaceS),
                 )
+            }
+            val successNotice = uiState.successNotice
+            if (successNotice != null) {
+                SuccessNotice(
+                    text = stringResource(successNotice),
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPadding, vertical = Dimens.SpaceS),
+                )
+                LaunchedEffect(successNotice) {
+                    delay(SUCCESS_NOTICE_MILLIS)
+                    actions.onSuccessNoticeShown()
+                }
             }
             if (uiState.documentPageCount > 1 && !uiState.busy) {
                 DocumentPageBar(uiState, actions)
@@ -392,6 +413,7 @@ private fun AddPageChoice(open: Boolean, actions: ViewerActions) {
     if (!open) return
     AlertDialog(
         onDismissRequest = actions.onAddPageDismiss,
+        modifier = Modifier.popIn(),
         title = { Text(text = stringResource(R.string.add_page_dialog_title)) },
         text = { Text(text = stringResource(R.string.add_page_dialog_body)) },
         confirmButton = {
@@ -424,7 +446,7 @@ private fun AddPageChoice(open: Boolean, actions: ViewerActions) {
 private fun RenameDialog(dialog: RenameDialogState, actions: ViewerActions) {
     AlertDialog(
         onDismissRequest = actions.onRenameDismiss,
-        modifier = Modifier.imePadding(),
+        modifier = Modifier.imePadding().popIn(),
         title = { Text(text = stringResource(R.string.rename_title)) },
         text = {
             val problem = dialog.problem

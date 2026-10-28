@@ -29,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -47,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import com.heybuddy.R
 import com.heybuddy.data.DocumentType
 import com.heybuddy.files.DetectedFileType
+import com.heybuddy.ui.components.AnimatedCheckMark
 import com.heybuddy.ui.components.BannerKind
-import com.heybuddy.ui.components.HeroIcon
 import com.heybuddy.ui.components.LoadingState
 import com.heybuddy.ui.components.MessageBanner
 import com.heybuddy.ui.components.PrimaryButton
@@ -57,7 +55,6 @@ import com.heybuddy.ui.components.ScreenScaffold
 import com.heybuddy.ui.components.SecondaryButton
 import com.heybuddy.ui.components.TypeBadge
 import com.heybuddy.ui.theme.Dimens
-import com.heybuddy.ui.theme.performConfirmHaptic
 import com.heybuddy.util.MAX_PAGES_PER_DOCUMENT
 
 /** Every type the picker may offer; the real type is checked from the bytes afterwards. */
@@ -345,18 +342,13 @@ private fun NameField(uiState: AddDocumentUiState, onNameChanged: (String) -> Un
 
 @Composable
 private fun SavedSection(onDone: () -> Unit) {
-    val view = LocalView.current
-    LaunchedEffect(Unit) { performConfirmHaptic(view) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpaceXl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
     ) {
-        HeroIcon(
-            icon = R.drawable.ic_check_circle,
-            tint = MaterialTheme.colorScheme.tertiary,
-            container = MaterialTheme.colorScheme.tertiaryContainer,
-        )
+        // Draws itself, with a light confirm haptic (spec 5.14, item 8).
+        AnimatedCheckMark(size = Dimens.HeroIconCircle)
         Text(text = stringResource(R.string.add_saved_title), style = MaterialTheme.typography.titleLarge)
         Text(
             text = stringResource(R.string.add_saved_note),

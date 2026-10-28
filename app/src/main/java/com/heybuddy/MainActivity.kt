@@ -26,15 +26,6 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,7 +54,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.heybuddy.ui.TopScreen
+import com.heybuddy.ui.TopScreenHost
+import com.heybuddy.ui.theme.LocalThemeCrossfade
+import com.heybuddy.ui.theme.ThemeCrossfadeHost
+import com.heybuddy.ui.VaultBackHandler
 import com.heybuddy.ui.VaultScreen
+import com.heybuddy.ui.VaultScreenHost
+import com.heybuddy.ui.growsFromCard
+import com.heybuddy.ui.adddocument.AddStage
 import com.heybuddy.ui.adddocument.AddDocumentActions
 import com.heybuddy.ui.adddocument.AddDocumentScreen
 import com.heybuddy.ui.adddocument.AddDocumentViewModel
@@ -225,12 +223,7 @@ private fun AppRoot(container: AppContainer, activity: FragmentActivity) {
     val shownScreen = if (targetScreen != TopScreen.VAULT) targetScreen else openedScreen
 
     ObscuredTouchNoticeHost {
-        val reduceMotion = LocalReduceMotion.current
-        AnimatedContent(
-            targetState = shownScreen,
-            transitionSpec = { topScreenTransition(targetState, reduceMotion) },
-            label = "topScreen",
-        ) { screen ->
+        TopScreenHost(screen = shownScreen) { screen ->
             when (screen) {
                 TopScreen.ERASING -> ErasingScreen()
                 TopScreen.ONBOARDING -> OnboardingScreen(
@@ -322,70 +315,38 @@ private fun RecoveryRoute(container: AppContainer) {
     )
 }
 
-/**
- * Opening the vault fades in gently. Locking is INSTANT: vault content must never stay on screen,
- * not even for a fade, once the vault is locked.
- */
-private fun topScreenTransition(target: TopScreen, reduceMotion: Boolean): ContentTransform {
-    if (target != TopScreen.VAULT) {
-        return EnterTransition.None togetherWith ExitTransition.None
-    }
-    return fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) togetherWith
-        fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
-}
-
-/**
- * Moving between vault screens (spec 5.14): a short fade with a slight upward slide; the viewer
- * opens with a gentle zoom-in instead.
- */
-private fun vaultScreenTransition(target: VaultScreen, reduceMotion: Boolean): ContentTransform {
-    val fade = fadeIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
-    val enter = if (target is VaultScreen.Viewer) {
-        fade + scaleIn(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion), initialScale = VIEWER_START_SCALE)
-    } else {
-        fade + slideInVertically(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion)) { height -> height / SLIDE_FRACTION }
-    }
-    val exit = fadeOut(motionSpec(MotionDurations.SCREEN_MILLIS, reduceMotion))
-    return enter togetherWith exit
-}
-
-/** The viewer starts at 96% size and grows to full size as it fades in. */
-private const val VIEWER_START_SCALE = 0.96f
-
-/** Screens slide in from 1/24 of their height below: enough to feel smooth, small enough to stay calm. */
-private const val SLIDE_FRACTION = 24
-
 @Composable
 private fun VaultRoute(container: AppContainer, activity: FragmentActivity) {
     // The current screen comes from VaultNavigator (memory only), never from saved screen state:
     // after any unlock, even one following the phone closing the app, the vault opens at HOME.
     val navigator = container.vaultNavigator
     val screen by navigator.screen.collectAsStateWithLifecycle()
-    val reduceMotion = LocalReduceMotion.current
-    AnimatedContent(
-        targetState = screen,
-        transitionSpec = { vaultScreenTransition(targetState, reduceMotion) },
-        label = "vaultScreen",
-    ) { shown ->
-        when (shown) {
-            // On the list, Back is not handled here, so it leaves the app normally.
-            VaultScreen.List -> {
-                val documents by remember { container.vaultRepository.observeDocuments() }
-                    .collectAsStateWithLifecycle(initialValue = emptyList())
-                VaultListScreen(
-                    documents = documents,
-                    onOpenDocument = { documentId -> navigator.open(VaultScreen.Viewer(documentId)) },
-                    onAddDocument = { navigator.open(VaultScreen.AddDocument) },
-                    onOpenSettings = { navigator.open(VaultScreen.Settings) },
+    // Lives as long as the vault is open: cleared by every lock, so each unlock shows the list's
+    // gentle entrance once, and coming back from a document does not repeat it.
+    val shownCards = remember { mutableSetOf<String>() }
+    ThemeCrossfadeHost {
+        VaultScreenHost(screen = screen, currentScreen = { navigator.screen.value }) { shown ->
+            when (shown) {
+                // On the list, Back is not handled here, so it leaves the app normally.
+                VaultScreen.List -> {
+                    val documents by remember { container.vaultRepository.observeDocuments() }
+                        .collectAsStateWithLifecycle(initialValue = emptyList())
+                    VaultListScreen(
+                        documents = documents,
+                        onOpenDocument = { documentId -> navigator.open(VaultScreen.Viewer(documentId)) },
+                        onAddDocument = { navigator.open(VaultScreen.AddDocument) },
+                        onOpenSettings = { navigator.open(VaultScreen.Settings) },
+                        shownCards = shownCards,
+                    )
+                }
+                VaultScreen.AddDocument -> AddDocumentRoute(
+                    container = container,
+                    activity = activity,
+                    onClose = { navigator.handleBack() },
                 )
+                VaultScreen.Settings -> SettingsRoute(container = container, activity = activity)
+                is VaultScreen.Viewer -> ViewerRoute(container = container, activity = activity, documentId = shown.documentId)
             }
-            VaultScreen.AddDocument -> AddDocumentRoute(
-                container = container,
-                activity = activity,
-                onClose = { navigator.handleBack() },
-            )
-            VaultScreen.Settings -> SettingsRoute(container = container, activity = activity)
-            is VaultScreen.Viewer -> ViewerRoute(container = container, activity = activity, documentId = shown.documentId)
         }
     }
 }
@@ -414,10 +375,13 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
         viewerViewModel.show(activity, documentId, screenWidth, screenLongest)
     }
     val uiState by viewerViewModel.uiState.collectAsStateWithLifecycle()
-    // Back: closes the Rename dialog if open (the dialog itself also does this), otherwise tidies
-    // up (PDF deleted, picture freed) and returns to the list.
-    BackHandler(onBack = viewerViewModel::onBack)
+    // Back: closes a dialog if one is open, otherwise tidies up (PDF deleted, picture freed) and
+    // returns to the list. Only the second can be previewed with the back gesture.
+    val leavesTheViewer = uiState.rename == null && !uiState.deleteConfirmOpen && !uiState.addPageChoiceOpen &&
+        !uiState.removePageConfirmOpen && !uiState.busy
+    VaultBackHandler(previewEnabled = leavesTheViewer, onBack = viewerViewModel::onBack)
     ViewerScreen(
+        modifier = Modifier.growsFromCard(documentId),
         uiState = uiState,
         actions = ViewerActions(
             onBack = viewerViewModel::onBack,
@@ -442,6 +406,7 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
             onRemovePageConfirm = { viewerViewModel.confirmRemovePage(activity) },
             onRemovePageDismiss = viewerViewModel::closeRemovePage,
             onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+            onSuccessNoticeShown = viewerViewModel::clearSuccessNotice,
         ),
     )
 }
@@ -465,12 +430,15 @@ private fun SettingsRoute(container: AppContainer, activity: FragmentActivity) {
     val theme by settingsViewModel.theme.collectAsStateWithLifecycle()
     val autoLock by settingsViewModel.autoLock.collectAsStateWithLifecycle()
     val navigator = container.vaultNavigator
+    val themeCrossfade = LocalThemeCrossfade.current
+    val themeScope = rememberCoroutineScope()
     // Back closes the licence text or the dialog first; otherwise returns to the list.
     val goBack = {
         val usedHere = settingsViewModel.onBack()
         if (!usedHere) navigator.handleBack()
     }
-    BackHandler(onBack = goBack)
+    val leavesSettings = uiState.openLicence == null && uiState.deleteDialog == null
+    VaultBackHandler(previewEnabled = leavesSettings, onBack = goBack)
     val licence = uiState.openLicence
     if (licence != null) {
         LicenceTextScreen(entry = licence, onBack = goBack)
@@ -483,7 +451,13 @@ private fun SettingsRoute(container: AppContainer, activity: FragmentActivity) {
         versionText = versionText(activity),
         actions = SettingsActions(
             onBack = goBack,
-            onThemeChosen = settingsViewModel::setTheme,
+            onThemeChosen = { choice ->
+                // Cross-fades the whole screen to the new theme (spec 5.14, item 9).
+                themeScope.launch {
+                    val crossfade = themeCrossfade
+                    if (crossfade == null) settingsViewModel.setTheme(choice) else crossfade.change { settingsViewModel.setTheme(choice) }
+                }
+            },
             onAutoLockChosen = settingsViewModel::setAutoLock,
             onLicenceClick = settingsViewModel::openLicence,
             onDeleteAllClick = settingsViewModel::openDeleteAll,
@@ -526,7 +500,8 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
         addViewModel.reset()
         onClose()
     }
-    BackHandler(onBack = closeAndForget)
+    // While saving, Back still waits for the save, so there is nothing to preview.
+    VaultBackHandler(previewEnabled = uiState.stage != AddStage.SAVING, onBack = closeAndForget)
     AddDocumentScreen(
         uiState = uiState,
         actions = AddDocumentActions(

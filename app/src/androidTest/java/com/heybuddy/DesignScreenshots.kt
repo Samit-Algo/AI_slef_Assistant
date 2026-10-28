@@ -224,6 +224,36 @@ class DesignScreenshots {
         captureAll(folder, screens)
     }
 
+    /** Task 1.10m: the motion states that can be seen in a still picture (fake sample data only). */
+    @Test
+    fun captureMotionScreens() {
+        val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_1_10m")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        val renamed = ViewerUiState(
+            stage = ViewerStage.READY,
+            title = "Sample photo",
+            documentPageCount = 1,
+            picture = drawSamplePreview(),
+            successNotice = com.heybuddy.R.string.viewer_renamed,
+        )
+        val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "01_unlock_real_failure" to {
+                UnlockScreen(UnlockUiState(errorMessage = com.heybuddy.R.string.unlock_error_too_many_tries, realFailureCount = 1), unlockSucceeded = false, onUnlockClick = {})
+            },
+            "02_unlock_cancelled_calm" to {
+                UnlockScreen(UnlockUiState(errorMessage = com.heybuddy.R.string.unlock_error_cancelled), unlockSucceeded = false, onUnlockClick = {})
+            },
+            "03_loading_outline" to { AddScreenSample(AddDocumentUiState(stage = AddStage.READING)) },
+            "04_viewer_opening_outline" to { ViewerScreen(ViewerUiState(title = "Sample photo"), noViewerActions()) },
+            "05_saved_check" to { AddScreenSample(AddDocumentUiState(stage = AddStage.SAVED)) },
+            "06_viewer_name_changed" to { ViewerScreen(renamed, noViewerActions()) },
+            "07_onboarding_dots_card2" to { OnboardingScreen(onFinished = {}, initialPage = 1) },
+            "08_settings_licences_closed" to { SettingsSample(SettingsUiState()) },
+        )
+        captureAll(folder, screens)
+    }
+
     @Composable
     private fun SettingsSample(state: SettingsUiState) {
         SettingsScreen(

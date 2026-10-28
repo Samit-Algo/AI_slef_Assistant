@@ -41,7 +41,21 @@ android {
                 "proguard-rules.pro",
             )
         }
+        // FRAME CHECKS ONLY, never shipped (Task 1.10m). Like release (not debuggable, so Compose
+        // runs at real speed), but signed with the debug key and not shrunk, so the instrumented
+        // motion script can drive it. Compose must be measured like this: a debug build is several
+        // times slower and gives misleading frame numbers.
+        create("profiling") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
+
+    // Tests normally run against the debug app; `-PmotionProfiling` runs them against "profiling".
+    testBuildType = if (project.hasProperty("motionProfiling")) "profiling" else "debug"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -69,6 +83,7 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment)
     implementation(libs.tink.android)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
     implementation(libs.sqlcipher.android)

@@ -20,3 +20,21 @@ fun messageForFailure(failure: UnlockFailure): Int {
         UnlockFailure.OTHER -> R.string.unlock_error_other
     }
 }
+
+/**
+ * Whether an unlock failure is a REAL error that earns the gentle shake and the reject haptic
+ * (spec 5.14, item 2). Cancelling the prompt is the user's choice, not an error (owner decision,
+ * Task 1.10m): it only shows the calm message.
+ *
+ * @param failure Why the unlock failed.
+ * @return true for lockouts, too many tries, an unusable key and other prompt errors.
+ */
+fun isRealUnlockFailure(failure: UnlockFailure): Boolean {
+    return when (failure) {
+        UnlockFailure.CANCELLED -> false
+        UnlockFailure.TOO_MANY_TRIES -> true
+        UnlockFailure.FINGERPRINT_LOCKED_LONG -> true
+        UnlockFailure.KEY_GONE -> true
+        UnlockFailure.OTHER -> true
+    }
+}

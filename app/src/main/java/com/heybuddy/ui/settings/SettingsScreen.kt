@@ -2,6 +2,12 @@ package com.heybuddy.ui.settings
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,11 +30,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
 import com.heybuddy.R
@@ -40,6 +53,9 @@ import com.heybuddy.ui.components.MessageBanner
 import com.heybuddy.ui.components.PrimaryButton
 import com.heybuddy.ui.components.ScreenScaffold
 import com.heybuddy.ui.theme.Dimens
+import com.heybuddy.ui.theme.LocalReduceMotion
+import com.heybuddy.ui.theme.MotionDurations
+import com.heybuddy.ui.theme.motionSpec
 
 /**
  * Everything the Settings screen can ask for.
@@ -166,14 +182,85 @@ private fun PrivacyLine(@StringRes text: Int) {
     Text(text = stringResource(text), style = MaterialTheme.typography.bodyMedium)
 }
 
+/** Starts closed: the licences matter, but rarely. Tapping the title opens and closes it smoothly. */
 @Composable
 private fun LicencesSection(onLicenceClick: (LicenceEntry) -> Unit) {
-    SettingsCard(icon = R.drawable.ic_article, title = R.string.settings_licences_title) {
-        for (entry in LicenceEntry.entries) {
-            LicenceRow(entry, onClick = { onLicenceClick(entry) })
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(Dimens.BorderWidth, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(Dimens.SpaceL)) {
+            ExpandableHeader(
+                icon = R.drawable.ic_article,
+                title = R.string.settings_licences_title,
+                expanded = expanded,
+                onToggle = { expanded = !expanded },
+            )
+            ExpandingContent(expanded = expanded) {
+                Column(modifier = Modifier.padding(top = Dimens.SpaceM)) {
+                    for (entry in LicenceEntry.entries) {
+                        LicenceRow(entry, onClick = { onLicenceClick(entry) })
+                    }
+                }
+            }
         }
     }
 }
+
+/** A section title that opens and closes it; the arrow turns to show which. TalkBack says "open"/"closed". */
+@Composable
+private fun ExpandableHeader(@DrawableRes icon: Int, @StringRes title: Int, expanded: Boolean, onToggle: () -> Unit) {
+    val arrowTurn by animateFloatAsState(
+        targetValue = if (expanded) ARROW_TURN_OPEN else 0f,
+        animationSpec = motionSpec(MotionDurations.EXPAND_MILLIS),
+        label = "arrowTurn",
+    )
+    val state = stringResource(if (expanded) R.string.settings_section_open else R.string.settings_section_closed)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = Dimens.MinTouchTarget)
+            .selectable(selected = expanded, onClick = onToggle, role = Role.Button)
+            .semantics { stateDescription = state },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceM),
+    ) {
+        Icon(painter = painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Dimens.BadgeIconSize))
+        Text(
+            text = stringResource(title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.rotate(arrowTurn),
+        )
+    }
+}
+
+/** Opens and closes smoothly (spec 5.14, item 9); instant with "Remove animations". */
+@Composable
+private fun ExpandingContent(expanded: Boolean, content: @Composable () -> Unit) {
+    val reduceMotion = LocalReduceMotion.current
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(motionSpec(MotionDurations.EXPAND_MILLIS, reduceMotion)) +
+            fadeIn(motionSpec(MotionDurations.EXPAND_MILLIS, reduceMotion)),
+        exit = shrinkVertically(motionSpec(MotionDurations.EXPAND_MILLIS, reduceMotion)) +
+            fadeOut(motionSpec(MotionDurations.EXPAND_MILLIS, reduceMotion)),
+    ) {
+        content()
+    }
+}
+
+/** The arrow points right when closed and down when open. */
+private const val ARROW_TURN_OPEN = 90f
 
 @Composable
 private fun LicenceRow(entry: LicenceEntry, onClick: () -> Unit) {

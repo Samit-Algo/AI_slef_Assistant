@@ -1,6 +1,7 @@
 package com.heybuddy.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -53,12 +55,15 @@ fun DocumentCard(
 ) {
     val encryptedLabel = stringResource(R.string.label_encrypted)
     val spokenDescription = listOf(name, typeLabel, addedText, encryptedLabel).joinToString(", ")
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(Dimens.BorderWidth, MaterialTheme.colorScheme.outlineVariant),
+        interactionSource = interactionSource,
         modifier = modifier
+            .pressScale(interactionSource)
             .fillMaxWidth()
             .heightIn(min = Dimens.MinTouchTarget)
             .semantics(mergeDescendants = true) { contentDescription = spokenDescription },

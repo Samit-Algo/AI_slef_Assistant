@@ -2,6 +2,7 @@ package com.heybuddy.ui.components
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -49,14 +51,17 @@ fun PrimaryButton(
 ) {
     val reportBlockedTouch = LocalObscuredTouchReporter.current
     val touchGuard = if (sensitive) Modifier.rejectObscuredTouches(reportBlockedTouch) else Modifier
+    val interactionSource = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = MaterialTheme.shapes.large,
         colors = colors,
+        interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = Dimens.ButtonHeight)
+            .pressScale(interactionSource)
             .then(touchGuard),
     ) {
         ButtonContent(text = text, icon = icon)
@@ -80,12 +85,14 @@ fun SecondaryButton(
     enabled: Boolean = true,
     @DrawableRes icon: Int? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         shape = MaterialTheme.shapes.large,
         border = BorderStroke(Dimens.BorderWidth, MaterialTheme.colorScheme.outline),
-        modifier = modifier.fillMaxWidth().heightIn(min = Dimens.ButtonHeight),
+        interactionSource = interactionSource,
+        modifier = modifier.fillMaxWidth().heightIn(min = Dimens.ButtonHeight).pressScale(interactionSource),
     ) {
         ButtonContent(text = text, icon = icon)
     }
@@ -100,10 +107,12 @@ fun SecondaryButton(
  */
 @Composable
 fun QuietButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interactionSource = remember { MutableInteractionSource() }
     TextButton(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
-        modifier = modifier.heightIn(min = Dimens.MinTouchTarget),
+        interactionSource = interactionSource,
+        modifier = modifier.heightIn(min = Dimens.MinTouchTarget).pressScale(interactionSource),
     ) {
         Text(text = text, style = MaterialTheme.typography.labelLarge)
     }

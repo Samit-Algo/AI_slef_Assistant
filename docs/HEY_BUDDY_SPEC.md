@@ -249,6 +249,7 @@ app/src/main/java/com/heybuddy/
 - `androidx.lifecycle` (incl. `lifecycle-process`)
 - Room + SQLCipher for Android (`net.zetetic:sqlcipher-android`)
 - Google Tink for Android (`com.google.crypto.tink:tink-android`)
+- `androidx.profileinstaller` (owner OK, Task 1.10m): installs the startup profiles AndroidX libraries ship; its exported `ProfileInstallReceiver` is removed from the manifest (rule 15)
 - Testing: JUnit, AndroidX Test, Compose UI test
 
 Use the latest stable versions at the time of building; confirm with the owner if a version is a pre-release.
@@ -399,13 +400,36 @@ Only the Material Symbols (Outlined, weight 400) icons we use, copied as vector 
 
 Planned set: the 8 type icons above, plus `lock`, `lock_open`, `fingerprint`, `add`, `arrow_back`, `more_vert`, `edit`, `check_circle`, `error`, `info`, `picture_as_pdf`, `image`, `chevron_left`, `chevron_right`, `shield` (about 23 files).
 
-#### Motion and haptics
+#### Motion — APPROVED by owner (Task 1.10m)
 
-- **Screen changes:** a short fade + slight slide (about 250 ms).
-- **List items:** fade in and rise 8 dp when they first appear (about 200 ms, slightly staggered).
-- **Unlock success:** the lock icon turns into an open lock with a short scale (about 300 ms) before the vault appears.
-- **Haptics:** a light "confirm" tap on successful unlock and on save (Android's built-in haptic feedback — **no vibrate permission needed**).
-- **Reduce animations:** if the phone's animation setting is off ("Remove animations" / animator scale 0), all motion is replaced by instant changes.
+**Motion rules (everywhere):**
+
+1. **Built-in tools only:** Compose's own animation APIs and Android animated vector drawables. No animation library (no Lottie) without asking the owner.
+2. **Locking is ALWAYS instant.** No animation may delay hiding documents; on lock the screen changes at once and any running animation is cut off.
+3. **"Remove animations" is respected everywhere:** every change becomes instant and loops stop (haptics follow their own rule below).
+4. **Durations 150–400 ms.** Springs use no-bounce or very-low-bounce settings and settle within about 350 ms. **Loops (owner decision A):** each single movement lasts at most 400 ms, then rests 1.2 s; "Remove animations" stops every loop.
+5. **Calm and premium:** no cartoon bounces or flashy effects; every animation has a purpose (where something came from, an action confirmed, or the app working).
+6. **Smooth on the owner's phone:** a quick frame check (`adb shell dumpsys gfxinfo`) on the main flows; any stutter is reported.
+
+**Haptics:** Android's built-in haptic feedback only (**no vibrate permission**). If the user has turned off touch vibration in the phone's settings, Hey Buddy gives **no** haptic feedback (owner decision, Task 1.10m).
+
+**The 9 items:**
+
+| # | Where | What happens | Time |
+| --- | --- | --- | --- |
+| 1 | List → viewer | The tapped card grows into the viewer; Back shrinks it into its card again. On lock: no reverse animation, instant. **Built as a "container transform"** (the viewer is revealed through a rounded window growing from the card to full screen while it fades in), **not with `SharedTransitionLayout`**: in the frame check on the owner's phone, `SharedTransitionLayout` doubled the cost (68 % slow frames vs 36 % for a plain fade); the container transform costs the same as a plain fade. Same look, same 350 ms, back-gesture preview still follows the finger. **Confirmed by the owner (Task 1.10m)** | 350 ms |
+| 2 | Unlock | Success: the shackle springs open + light confirm haptic. **Real failure only** (lockout, too many attempts, key not usable): the icon shakes gently 3 times (4 dp) + light reject haptic. **Cancelling the prompt is a choice, not an error** (owner decision): no shake, no haptic, just the calm message | 300 ms / 300 ms |
+| 3 | Buttons, cards, "+", dialogs | Pressed: sink to 97 %. The "+" button and dialogs open with a soft spring from 92 % | about 150 ms / about 250 ms |
+| 4 | Predictive back (Android 14+) | System back-gesture preview on (`enableOnBackInvokedCallback`); a slow back swipe on the viewer, Add and Settings shows the screen behind, cancelling stays put. Tested on the emulator in Task 1.11 (owner phone is Android 13) | follows the finger |
+| 5 | Vault list | Cards fade in and rise one after another, first appearance only | 200 ms + 40 ms per card, at most 240 ms delay |
+| 6 | "Opening…" and "Saving…" | A grey outline of the page/document with a soft light sweep instead of a spinner | one 400 ms sweep, 1.2 s rest |
+| 7 | Onboarding | Cards slide with a slight depth effect; dots slide and stretch between pages; the hero icon has a small gentle loop | 300 ms slide; loop: one 300 ms nudge, 1.2 s rest |
+| 8 | Saved / Renamed / page added | A self-drawing check mark + light confirm haptic | 400 ms |
+| 9 | Settings | Sections expand/collapse smoothly (the Licences section opens and closes; it starts closed); the theme change cross-fades the whole screen instead of flashing (one picture of the old screen fades out over the new theme, so nothing is rebuilt per frame) | 250 ms / 300 ms |
+
+**Frame check method:** a "profiling" build type (like release, not debuggable, debug-signed, not shrunk; never shipped) runs the motion script; each flow is played once unmeasured, then measured with `dumpsys gfxinfo`. A debug build gives misleading numbers for Compose.
+
+**Tests:** "Remove animations" makes every change instant; locking from the viewer hides the document in the same frame; no animation starts on lock. The owner's phone blocks `adb screenrecord`, so the video was **skipped (owner decision, Task 1.10m)**; the scripted flows (`MotionVideoScript`) remain for frame checks.
 
 #### Accessibility
 

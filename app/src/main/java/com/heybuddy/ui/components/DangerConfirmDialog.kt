@@ -49,8 +49,8 @@ fun DangerConfirmDialog(
     val reportBlockedTouch = LocalObscuredTouchReporter.current
     AlertDialog(
         onDismissRequest = onCancel,
-        // Moves the dialog above the keyboard when it has a text field.
-        modifier = Modifier.imePadding(),
+        // Moves the dialog above the keyboard when it has a text field; opens with a soft spring.
+        modifier = Modifier.imePadding().popIn(),
         title = { Text(text = title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL)) {

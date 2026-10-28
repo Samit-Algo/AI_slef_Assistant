@@ -15,6 +15,9 @@ biometric = "1.1.0"
 fragment = "1.9.1"
 tink = "1.24.0"
 room = "2.8.5"
+# Owner OK (Task 1.10m): installs the startup profiles that Compose and other AndroidX libraries
+# ship, so screens are pre-compiled instead of interpreted at first. No network use.
+profileinstaller = "1.4.1"
 sqlcipher = "4.19.1"
 ksp = "2.3.12"
 junit = "4.13.2"
@@ -29,6 +32,7 @@ androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "l
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
 tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }

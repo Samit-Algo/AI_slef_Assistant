@@ -89,6 +89,7 @@ data class RenameDialogState(
  * @property errorMessage Why the page failed, or null.
  * @property canRetry True when the failure was a cancelled "Confirm it's you".
  * @property notice A message about the last add/remove, or null.
+ * @property successNotice A short "it worked" message with a self-drawing check, or null.
  * @property rename The Rename dialog, or null when it is closed.
  * @property deleteConfirmOpen True while "Delete this document?" is showing.
  * @property deleting True while the document is being deleted.
@@ -110,6 +111,7 @@ data class ViewerUiState(
     @StringRes val errorMessage: Int? = null,
     val canRetry: Boolean = false,
     @StringRes val notice: Int? = null,
+    @StringRes val successNotice: Int? = null,
     val rename: RenameDialogState? = null,
     val deleteConfirmOpen: Boolean = false,
     val deleting: Boolean = false,
@@ -385,6 +387,11 @@ class ViewerViewModel(
         viewModelScope.launch { removePageAndShowNext(prompt, documentId, page.pageId, current.documentPageIndex) }
     }
 
+    /** Called once the success message has been shown long enough. */
+    fun clearSuccessNotice() {
+        mutableUiState.value = mutableUiState.value.copy(successNotice = null)
+    }
+
     /** Opens the Rename dialog with the current name filled in. */
     fun openRename() {
         val current = mutableUiState.value
@@ -594,6 +601,7 @@ class ViewerViewModel(
         }
         mutableUiState.value = mutableUiState.value.copy(addingPages = false, notice = notice)
         if (addedCount == 0) return
+        mutableUiState.value = mutableUiState.value.copy(successNotice = R.string.viewer_page_added)
         // Show the first new page: it now sits right after the pages that were there before.
         val firstNewPage = pages.size
         reloadAndShow(prompt, documentId, firstNewPage)
@@ -654,7 +662,7 @@ class ViewerViewModel(
             return
         }
         val cleanName = (DisplayNameValidator.validate(newName) as DisplayNameResult.Valid).cleanName
-        mutableUiState.value = mutableUiState.value.copy(title = cleanName, rename = null)
+        mutableUiState.value = mutableUiState.value.copy(title = cleanName, rename = null, successNotice = R.string.viewer_renamed)
     }
 
     /** Frees everything from the current document. Safe to call more than once. */

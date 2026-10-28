@@ -25,8 +25,9 @@ fun HeyBuddyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) HeyBuddyDarkColors else HeyBuddyLightColors
     val reduceMotion = rememberReduceMotion()
+    // Changing the theme cross-fades through ThemeCrossfadeHost, not by animating these colours.
+    val colorScheme = if (darkTheme) HeyBuddyDarkColors else HeyBuddyLightColors
     CompositionLocalProvider(
         LocalDarkTheme provides darkTheme,
         LocalReduceMotion provides reduceMotion,
@@ -44,3 +45,4 @@ fun HeyBuddyTheme(
 @Composable
 @ReadOnlyComposable
 fun isDarkThemeActive(): Boolean = LocalDarkTheme.current
+

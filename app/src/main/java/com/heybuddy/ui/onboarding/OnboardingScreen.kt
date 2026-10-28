@@ -2,6 +2,9 @@ package com.heybuddy.ui.onboarding
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,9 +30,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,8 +46,13 @@ import com.heybuddy.ui.components.HeroIcon
 import com.heybuddy.ui.components.MessageBanner
 import com.heybuddy.ui.components.PrimaryButton
 import com.heybuddy.ui.components.QuietButton
+import com.heybuddy.ui.components.gentleNudgeLoop
 import com.heybuddy.ui.theme.Dimens
+import com.heybuddy.ui.theme.LocalReduceMotion
+import com.heybuddy.ui.theme.MotionDurations
+import com.heybuddy.ui.theme.motionSpec
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
  * One onboarding card (spec 5.6).
@@ -68,6 +78,9 @@ private val Cards: List<OnboardingCard> = listOf(
 
 private val DotSize = 8.dp
 
+/** The current page's dot stretches into a short pill (spec 5.14, item 7). */
+private val SelectedDotWidth = 20.dp
+
 /**
  * The first-start screen: three cards to swipe through, then "Set up my vault".
  * Shown only on a first start, and again after "Delete everything".
@@ -90,14 +103,34 @@ fun OnboardingScreen(onFinished: () -> Unit, initialPage: Int = 0) {
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding),
         ) { page ->
-            CardPage(Cards[page])
+            CardPage(Cards[page], modifier = Modifier.slideDepth(pagerState, page))
         }
     }
 }
 
+/**
+ * A slight depth effect while swiping (spec 5.14, item 7): the card's content moves a little slower
+ * than the page and fades a little, so it feels layered rather than flat. Off with "Remove animations".
+ */
 @Composable
-private fun CardPage(card: OnboardingCard) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun Modifier.slideDepth(pagerState: PagerState, page: Int): Modifier {
+    if (LocalReduceMotion.current) return this
+    return this.graphicsLayer {
+        val pagesAway = pagerState.getOffsetDistanceInPages(page).coerceIn(-1f, 1f)
+        translationX = pagesAway * size.width * DEPTH_LAG
+        alpha = 1f - abs(pagesAway) * DEPTH_FADE
+    }
+}
+
+/** The content lags a quarter of the page's movement behind. */
+private const val DEPTH_LAG = 0.25f
+
+/** A card one page away is 40 % faded. */
+private const val DEPTH_FADE = 0.4f
+
+@Composable
+private fun CardPage(card: OnboardingCard, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier
                 .widthIn(max = Dimens.MaxContentWidth)
@@ -106,7 +139,7 @@ private fun CardPage(card: OnboardingCard) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
         ) {
-            HeroIcon(icon = card.icon)
+            HeroIcon(icon = card.icon, modifier = Modifier.gentleNudgeLoop())
             Spacer(modifier = Modifier.height(Dimens.SpaceS))
             Text(
                 text = stringResource(card.title),
@@ -130,7 +163,14 @@ private fun CardPage(card: OnboardingCard) {
 @Composable
 private fun OnboardingControls(pagerState: PagerState, onFinished: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val reduceMotion = LocalReduceMotion.current
     val page = pagerState.currentPage
+    // Next/Back slide in 300 ms (spec 5.14, item 7), or jump at once with "Remove animations".
+    val goToPage = { target: Int ->
+        scope.launch {
+            if (reduceMotion) pagerState.scrollToPage(target) else pagerState.animateScrollToPage(target, animationSpec = tween(MotionDurations.ONBOARDING_SLIDE_MILLIS))
+        }
+    }
     val isLast = page == Cards.lastIndex
     Column(
         modifier = Modifier
@@ -145,14 +185,14 @@ private fun OnboardingControls(pagerState: PagerState, onFinished: () -> Unit) {
         } else {
             PrimaryButton(
                 text = stringResource(R.string.onboarding_next),
-                onClick = { scope.launch { pagerState.animateScrollToPage(page + 1) } },
+                onClick = { goToPage(page + 1) },
             )
         }
         // Keeps the buttons in the same place on every card; on the first card there is no Back.
         if (page > 0) {
             QuietButton(
                 text = stringResource(R.string.onboarding_back),
-                onClick = { scope.launch { pagerState.animateScrollToPage(page - 1) } },
+                onClick = { goToPage(page - 1) },
             )
         } else {
             Spacer(modifier = Modifier.height(Dimens.MinTouchTarget))
@@ -169,8 +209,23 @@ private fun PageDots(currentPage: Int, pageCount: Int) {
         horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
     ) {
         for (index in 0 until pageCount) {
-            val color = if (index == currentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-            Box(modifier = Modifier.size(DotSize).background(color = color, shape = CircleShape))
+            PageDot(selected = index == currentPage)
         }
     }
+}
+
+/** One dot; the selected one stretches and takes the brand colour, sliding smoothly between pages. */
+@Composable
+private fun PageDot(selected: Boolean) {
+    val width by animateDpAsState(
+        targetValue = if (selected) SelectedDotWidth else DotSize,
+        animationSpec = motionSpec(MotionDurations.PAGE_DOTS_MILLIS),
+        label = "dotWidth",
+    )
+    val color by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = motionSpec(MotionDurations.PAGE_DOTS_MILLIS),
+        label = "dotColor",
+    )
+    Box(modifier = Modifier.size(width = width, height = DotSize).background(color = color, shape = CircleShape))
 }

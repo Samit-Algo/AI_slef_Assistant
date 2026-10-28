@@ -15,10 +15,13 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * @property errorMessage The last failure message, or null if none.
  * @property showNoFingerprintNote True when no fingerprint is set up, so we explain that PIN works.
+ * @property realFailureCount Goes up once for every REAL failure (never for a cancel), so the screen
+ *   shakes the lock exactly once per failure.
  */
 data class UnlockUiState(
     @StringRes val errorMessage: Int? = null,
     val showNoFingerprintNote: Boolean = false,
+    val realFailureCount: Int = 0,
 )
 
 /**
@@ -60,7 +63,9 @@ class UnlockViewModel(private val unlocker: BiometricUnlocker) : ViewModel() {
         // On success the vault lock state changes and the app moves away from this screen.
         if (result is UnlockResult.Failed) {
             val message = messageForFailure(result.reason)
-            mutableUiState.value = mutableUiState.value.copy(errorMessage = message)
+            val current = mutableUiState.value
+            val failureCount = if (isRealUnlockFailure(result.reason)) current.realFailureCount + 1 else current.realFailureCount
+            mutableUiState.value = current.copy(errorMessage = message, realFailureCount = failureCount)
         }
     }
 
