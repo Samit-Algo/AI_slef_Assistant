@@ -239,3 +239,18 @@ const val TYPE_GUESS_MIN_SCORE: Int = 3
 
 /** How far the best type must be ahead of the next one, so a mixed page gets no suggestion. */
 const val TYPE_GUESS_MIN_LEAD: Int = 2
+
+// Fact rules part 1 (Task 2.6, spec 7.7).
+
+/** At most this many look-alike fixes in one PAN; more would be guessing, so it is not taken. */
+const val PAN_MAX_FIXES: Int = 2
+
+/** Oldest age accepted for a date of birth (spec 7.7: age 0 to 120). */
+const val MAX_AGE_YEARS: Int = 120
+
+/** Earliest year in a driving licence number (the format is far newer, so older is a misread). */
+const val DL_EARLIEST_YEAR: Int = 1950
+
+/** Range for other dates (issue, validity): wide, but outside it a "date" is a misread number. */
+const val DATE_EARLIEST_YEAR: Int = 1900
+const val DATE_LATEST_YEAR: Int = 2100

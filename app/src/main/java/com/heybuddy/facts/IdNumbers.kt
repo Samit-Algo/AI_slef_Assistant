@@ -50,8 +50,11 @@ object IdNumbers {
     /**
      * Every run of digits, joined across single spaces or hyphens ("9999 4567 1231" → one run), so
      * a number is always seen whole and never as part of a longer one.
+     *
+     * @param text Text with ASCII digits.
+     * @return Each run, digits only.
      */
-    private fun digitRuns(text: String): List<String> {
+    fun digitRuns(text: String): List<String> {
         return DIGIT_RUN.findAll(text).map { match -> match.value.filter { character -> character in '0'..'9' } }.toList()
     }
 
