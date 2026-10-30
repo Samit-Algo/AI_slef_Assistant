@@ -29,7 +29,8 @@ import java.util.Locale
 
 /**
  * Spec 7.3-2 on a real phone: pages are read only after being decrypted in memory, and the read text
- * is never written to disk, never logged, and dropped on lock. Uses a test vault and fake samples.
+ * is never written to disk, never logged, and dropped on lock. Uses the app's merged reader (ML Kit
+ * and Tesseract for Tamil, Task 2.3), a test vault and fake samples.
  */
 @RunWith(AndroidJUnit4::class)
 class OcrPrivacyTest {
@@ -37,7 +38,8 @@ class OcrPrivacyTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val vault = TestVault(context, name = "ocr_privacy")
-    private val reader = MlKitTextReader()
+    // The app's own reader: ML Kit and Tesseract (Tamil), merged (Task 2.3).
+    private val reader = MergedTextReader(MlKitTextReader(), TesseractTextReader(context))
     private val session = ReadingSession(vault.lockState)
     private val pageReader = DocumentPageReader(vault.repository, reader, session)
 
@@ -62,6 +64,7 @@ class OcrPrivacyTest {
         val page = pageReader.readPage(documentId, pageId)
 
         assertTrue("The sample must actually have been read", page.text.contains(SAMPLE_NAME))
+        assertTrue("The Tamil name must actually have been read", page.text.contains(SAMPLE_TAMIL_NAME))
         val log = runShell("logcat -d -T '$since'")
         for (secret in SECRETS) {
             assertFalse("\"$secret\" appeared in the log", log.contains(secret))
@@ -156,7 +159,12 @@ class OcrPrivacyTest {
 
     private companion object {
         const val SAMPLE_NAME = "TESTA KUMARI"
-        val SECRETS = listOf(SAMPLE_NAME, "9999 4567 1231", "999945671231", "14/08/1990", "SAMPLE STREET")
+        const val SAMPLE_TAMIL_NAME = "டெஸ்டா குமாரி"
+        val SECRETS = listOf(
+            SAMPLE_NAME, "9999 4567 1231", "999945671231", "14/08/1990", "SAMPLE STREET",
+            // Tamil (Task 2.3): the name and an address word, as read by Tesseract.
+            SAMPLE_TAMIL_NAME, "மயிலாப்பூர்",
+        )
         const val PAGE_ID = "0a0b0c0d-1111-4222-8333-444455556666"
         const val MIME_JPEG = "image/jpeg"
         const val MIME_PDF = "application/pdf"

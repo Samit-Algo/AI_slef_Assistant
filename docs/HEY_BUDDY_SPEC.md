@@ -534,10 +534,63 @@ app holds no network permission; works in airplane mode). Results go in a table 
 recommendation, and **the owner is asked before either library is added**. The measuring code for
 the engine that is not chosen is removed again.
 
-**Merging:** both engines sit behind the `TextReader` interface (Task 2.2). For each page, ML Kit's
-lines (English, Hindi) and the Tamil engine's lines (Tamil script) are merged into one list in
-reading order; where both read the same spot, the line in that spot's script wins (Tamil letters →
-Tamil engine; otherwise ML Kit).
+**Measured (Task 2.3, owner's phone, 16 fake Tamil samples: a Tamil Nadu style certificate form and a
+Tamil name and address block in clean, tilted and shadow looks, and the Tamil lines of the Aadhaar-style
+and licence-style cards in 5 looks; each engine in a fresh process).** Full lines read:
+`docs/measurements/task-2.3-what-each-engine-read.txt`.
+
+| | **Tesseract 5.5.1 + `tam` fast (CHOSEN)** | Tesseract + `tam` best | PaddleOCR PP-OCRv5 mobile on ONNX Runtime 1.31.1 | ML Kit alone (no Tamil) |
+| --- | --- | --- | --- | --- |
+| Tamil characters, all 16 | 95.4 % | 95.7 % | 91.5 % | 23.7 % (garbage) |
+| Tamil characters, clean / photo-style | 99.3 % / 94.2 % | 99.7 % / 94.3 % | 85.2 % / 93.6 % | 22.3 % / 24.1 % |
+| Tamil name read exactly | 15/16 | 15/16 | 12/16 | 0/16 |
+| PIN code read exactly | 16/16 | 16/16 | 16/16 | 14/16 |
+| Time per page | 0.6 s | 0.7 s | 2.3 s | 0.35 s |
+| First-time loading | 0.7 s | 0.9 s | 3.2 s | 1.0 s |
+| Peak extra RAM | 58 MB | 68 MB | 318 MB | 131–174 MB |
+| Size, 64-bit phone | +10.7 MB (7.5 engine + 3.2 model) | +13.5 MB | +47 MB (34.3 engine + 12.7 models) | — |
+| Licence | Apache 2.0 (+ Leptonica BSD-2, libjpeg, libpng) | same | Apache 2.0 (models) + MIT | ML Kit terms |
+| Network | none | none | none | none |
+
+Notes: PaddleOCR splits these Tamil lines into single words at every picture size tried, and a split
+word can lose its left vowel sign (டெமோ → டமோ); its official models (Hugging Face, PaddlePaddle) were
+converted with paddle2onnx 2.1.0 on PaddlePaddle 3.1.1 (3.3.1 does not load the converter on
+Windows); checksums are kept on the owner's PC (HeyBuddyTools). With the shared cleanup below,
+Tesseract fast reads the clean samples at 100 % (Task 2.3, final run).
+
+**Owner decision (2026-10-29):** Tesseract with the **fast** Tamil model. PaddleOCR, ONNX Runtime and
+the "best" model are removed. Tesseract4Android is **built by us from its official source** (no
+JitPack): exact commit, checksum and rebuild steps in `docs/TESSERACT_BUILD.md`; the app's build stops
+if the file differs. The Tamil model is the official `tessdata_fast` `tam.traineddata`, stored
+uncompressed in the app's assets and copied on first use to `noBackupFilesDir/ocr_models/tessdata/`
+(the public model only, never anyone's data).
+
+**Merging (owner rule, Task 2.3):** both engines sit behind `TextReader`; `MergedTextReader` runs
+ML Kit, then Tesseract (one after the other, so only one engine's working memory at a time), and
+`LineMerge` decides per spot. Two lines are in the same spot when they share more than half of the
+lower line's height and overlap from left to right.
+- ML Kit's line is **GARBAGE** if it has letters of any script other than Latin or Devanagari (its
+  look-alikes for Tamil are often Bengali), or ML Kit's own confidence is below 0.5. It is **REAL** if
+  it has only Latin/Devanagari letters and confidence ≥ 0.7 (or no confidence). Otherwise UNSURE.
+- Tesseract's line is **SURELY TAMIL** if at least 80 % of its letters are Tamil and Tesseract's
+  confidence is ≥ 0.8.
+- ML Kit REAL and Tesseract not surely Tamil → keep ML Kit's line only (Tesseract's garbage over
+  English/Hindi). Tesseract surely Tamil and ML Kit GARBAGE → keep Tesseract's line only.
+  **Anything else → keep BOTH.** A line with nothing on top of it is always kept. Never drop a line
+  that might be real.
+- The limits come from the confidences measured on 31 fake samples: ML Kit's real English/Hindi
+  0.71–0.94, its Tamil garbage 0.18–0.64; Tesseract's real Tamil 0.88–0.96, its garbage 0.00–0.72.
+  Replayed on all samples, no real line of either engine was dropped, and ML Kit's wrong PIN
+  ("…647001" for 641001, Task 2.2) is always replaced by Tesseract's correct line.
+- Merged reader, measured: Tamil 95.7 % (clean 100 %), English and Hindi unchanged, about 1.1 s a
+  page, 1.6 s first time, about 163 MB peak extra RAM for both engines together.
+
+**Tamil text cleanup (owner rule):** one shared function, `TamilText.clean`, used everywhere Tamil is
+handled (reading results now; typed fields in 2.10; fact matching in 2.6 and 2.7): removes the
+invisible joiners Tesseract writes after each pulli, puts a left vowel sign (ெ ே ை) written before
+its consonant back after it ("தந்‌ைத" → "தந்தை"), and applies Unicode NFC.
+
+**Still open:** the Tamil scores on real phone-camera photos (Task 2.4, with the camera test; and 8.1).
 
 ### 7.5 Camera: in-app CameraX (recommended) vs the system camera app
 
@@ -658,7 +711,7 @@ New table `profile_facts`:
 | 1 | `com.google.mlkit:text-recognition-devanagari` (bundled) — **APPROVED** | 16.0.1 | ML Kit Terms (free, closed source) | Hindi + English OCR on the phone |
 | 2 | `com.google.mlkit:text-recognition` (bundled, Latin) — **NOT USED** (owner decision after the Task 2.2 measurement: not clearly better) | 16.0.1 | ML Kit Terms | — |
 | 3 | `androidx.camera:camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-compose` — **APPROVED** | 1.6.2 | Apache 2.0 | In-app camera, photo straight to memory |
-| 4 | Tamil engine: Tesseract4Android + `tam` model, **or** PaddleOCR Tamil model + ONNX Runtime Mobile — **chosen by measurement in Task 2.3; ask the owner before adding** | latest stable at that time | Apache 2.0 / Apache 2.0 + MIT (to confirm) | Tamil reading, fully offline |
+| 4 | Tamil engine: **Tesseract4Android, built by us from source** (`app/libs/`, see docs/TESSERACT_BUILD.md) + the official `tam` fast model — **APPROVED** (owner, Task 2.3). PaddleOCR/ONNX Runtime were measured and NOT added | 4.9.0 (Tesseract 5.5.1) | Apache 2.0 (+ Leptonica BSD-2, libjpeg, libpng) | Tamil reading, fully offline |
 | 5 | `com.google.zxing:core` — **ask the owner at Task 2.12** | latest stable at that time | Apache 2.0 | Reading the Aadhaar Secure QR offline |
 
 Library 1 brings along Google Play services base/basement/tasks, ML Kit common and vision
@@ -674,7 +727,7 @@ permission.
 | **2.1 OCR library and privacy guard** | Add the bundled ML Kit recognizer; remove ACCESS_NETWORK_STATE and the data-transport job/receiver from the manifest; keep only `arm64-v8a` and `armeabi-v7a`; phone test: installed app has no network permission, only the launcher is exported; Licences screen shows ML Kit's third-party licences; report the real size added | Test passes; app size growth reported; airplane-mode check by the owner |
 | **2.2 Text reader** | `TextReader` (an interface, so the Tamil engine of 2.3 plugs in next to ML Kit): reads one page (photo bytes in memory, or a PDF page drawn with PdfRenderer) and returns lines with their positions; memory only; wiped after use; never logged. Phone tests on made-up sample images (rendered English and Hindi text). Compare Devanagari-only vs adding Latin on the same samples | Sample text read correctly; decision on library 2 |
 | **2.3 Tamil reading engine** | Compare (a) Tesseract + `tam` and (b) PaddleOCR Tamil + ONNX Runtime Mobile on three made-up Tamil samples (7.4a): character accuracy, speed on the owner's phone, size, licence, no internet. Table + recommendation; **ask the owner before adding either library**; then build the chosen engine behind `TextReader` and merge its Tamil lines with ML Kit's per page | Owner picks the engine from the measured table; Tamil sample text read with the measured accuracy; still no network permission |
-| **2.4 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera; **real phone-camera reading test** (from Task 2.2): the owner photographs the 3 generated clean fake samples with the phone camera and they are measured like Task 2.2 (character accuracy, fields found, time) as a "real photo" group |
+| **2.4 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera; **real phone-camera reading test** (from Task 2.2): the owner photographs the 3 generated clean fake samples with the phone camera and they are measured like Task 2.2 (character accuracy, fields found, time) as a "real photo" group, and the Tamil scores re-checked on real photos of the Tamil samples (from Task 2.3) |
 | **2.5 Document type guess** | Pure rules (7.6) + computer tests | Each sample type guessed; unknown stays Other |
 | **2.6 Facts part 1: numbers and dates (including Tamil month names)** | PAN rule, Aadhaar rule with Verhoeff, VID/enrolment/masked exclusion, date rules with Tamil month names and Tamil digits (7.7) + computer tests (including OCR mix-ups) | All rule tests pass |
 | **2.7 Facts part 2: name, gender, address (English, Hindi and Tamil labels)** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts, Tamil labels (7.7), Tamil-script names and addresses + computer tests on made-up samples | All rule tests pass |
@@ -696,7 +749,11 @@ permission.
 4. "My details" is a separate tab on the vault screen: "Documents | My details".
 5. **Task 2.2 (2026-10-28):** ML Kit Latin model NOT added; no image preparation in the app (kept
    in test code); no perspective straightening; the real phone-camera test moves to Task 2.4 and 8.1.
-6. **Tamil is required** (later the same day): a Tamil reading engine chosen by measurement in
+6. **Task 2.3 (2026-10-29):** Tamil engine = Tesseract with the fast model, built by us from its
+   official source (no JitPack); PaddleOCR, ONNX Runtime and the best model removed; the 7.4a merge
+   rule (keep both when unsure); one shared Tamil cleanup function; Tamil scores re-checked on real
+   photos in Task 2.4.
+7. **Tamil is required** (later the same day): a Tamil reading engine chosen by measurement in
    Task 2.3 (ask before adding it), Tamil labels and month names in the fact rules, typed Tamil
    fields in "My details", and Tamil Nadu certificates as document types (Task 2.11, with a migration).
 
@@ -728,7 +785,7 @@ before the first real user** gets the app. **No emulator anywhere unless the own
 | "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
 | Predictive back preview: NOT TESTED YET | 1.10m | The back-swipe preview only exists on Android 14+; the owner's phone runs Android 13 | On a real Android 14+ phone (no emulator unless the owner asks): swipe back slowly on the viewer, Add and Settings screens; a preview of the previous screen must show, and cancelling the swipe stays on the screen |
 | `SecureWindowTest.ourOwnPickerDoesNotLockTheVault` was flaky once: RECHECK | 1.10 | One full run (100 of 101 passed) failed it with "Activity never becomes requested state RESUMED" while the phone was freezing and unfreezing test processes (battery optimisation). It passed 3 of 3 times on its own | Owner decision: recheck in the full run before the first real user, AFTER battery optimisation is turned back on for Hey Buddy; it must pass |
-| Real phone-camera reading test: NOT TESTED YET (unless closed in Task 2.4) | 2.2 | Task 2.2 had no phone-camera photos of the generated samples; internet pictures are not allowed (CLAUDE.md) | Photograph the 3 generated clean fake samples (`aadhaar_style_clean`, `pan_style_clean`, `licence_style_clean`) with the phone camera, run the `OcrMeasurement` "real photo" group; names, dates and Aadhaar/PAN numbers must be read |
+| Real phone-camera reading test, including the Tamil scores (Task 2.3): NOT TESTED YET (unless closed in Task 2.4) | 2.2, 2.3 | Task 2.2 had no phone-camera photos of the generated samples; internet pictures are not allowed (CLAUDE.md) | Photograph the 3 generated clean fake samples (`aadhaar_style_clean`, `pan_style_clean`, `licence_style_clean`) with the phone camera, run the `OcrMeasurement` "real photo" group; names, dates and Aadhaar/PAN numbers must be read |
 | Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | Switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
 
 ### 8.2 Phase 1 review checks (moved from Task 1.11)

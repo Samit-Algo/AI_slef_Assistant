@@ -1,7 +1,20 @@
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+// Tesseract4Android 4.9.0, built by us from its official source (owner rule, Task 2.3; how to
+// rebuild it: docs/TESSERACT_BUILD.md). The build stops if the file is not exactly the one we built.
+val TESSERACT_AAR = "libs/tesseract4android-4.9.0.aar"
+val TESSERACT_AAR_SHA256 = "3aede2b48ab17d2b3b5a6bef51ec43989831dadb9eb9226fea9fec76d1189508"
+val tesseractAarSha256 = MessageDigest.getInstance("SHA-256")
+    .digest(file(TESSERACT_AAR).readBytes())
+    .joinToString("") { byte -> "%02x".format(byte) }
+check(tesseractAarSha256 == TESSERACT_AAR_SHA256) {
+    "$TESSERACT_AAR is not the file we built (checksum $tesseractAarSha256). See docs/TESSERACT_BUILD.md."
 }
 
 ksp {
@@ -87,6 +100,12 @@ android {
         // SafeLog reads BuildConfig.DEBUG so it can stay silent in release builds.
         buildConfig = true
     }
+
+    androidResources {
+        // The Tamil model is copied to a file on first use; uncompressed lets the app check its
+        // size cheaply and avoids unpacking 3 MB on every check (Task 2.3).
+        noCompress += "traineddata"
+    }
 }
 
 dependencies {
@@ -103,6 +122,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.sqlcipher.android)
     implementation(libs.mlkit.text.recognition.devanagari)
+    // Owner OK (Task 2.3): Tamil reading. Built by us from the official source, not downloaded;
+    // see docs/TESSERACT_BUILD.md and the checksum check below.
+    implementation(files(TESSERACT_AAR))
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

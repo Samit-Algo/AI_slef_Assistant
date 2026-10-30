@@ -1,0 +1,119 @@
+Task 2.3 - what each engine read on the FAKE Tamil samples (clean and tilted).
+Lines are separated by |. Fake data only. Run 2 (after the PaddleOCR box fix), owner phone Realme RMX3085, 2026-10-29. The sample pictures are made by TamilFakeDocuments (test code).
+
+=================== tesseractFast
+### per sample
+- tn_certificate_style_clean: 99.3% Tamil name:Y PIN:Y Date:Y 684 ms
+- tamil_address_block_clean: 97.8% Tamil name:Y PIN:Y 351 ms
+- tn_certificate_style_tilted: 86.9% Tamil name:Y PIN:Y Date:Y 739 ms
+- tamil_address_block_tilted: 94.5% Tamil name:Y PIN:Y 432 ms
+- tn_certificate_style_shadow: 91.8% Tamil name:Y PIN:Y Date:Y 671 ms
+- tamil_address_block_shadow: 67.0% Tamil name:N PIN:Y 379 ms
+- aadhaar_style_clean: 100.0% Tamil name:Y PIN:Y 598 ms
+- aadhaar_style_tilted: 100.0% Tamil name:Y PIN:Y 565 ms
+- aadhaar_style_shadow: 100.0% Tamil name:Y PIN:Y 512 ms
+- aadhaar_style_blurred: 100.0% Tamil name:Y PIN:Y 553 ms
+- aadhaar_style_low_light: 100.0% Tamil name:Y PIN:Y 673 ms
+- licence_style_clean: 100.0% Tamil name:Y PIN:Y 605 ms
+- licence_style_tilted: 98.6% Tamil name:Y PIN:Y 806 ms
+- licence_style_shadow: 100.0% Tamil name:Y PIN:Y 645 ms
+- licence_style_blurred: 100.0% Tamil name:Y PIN:Y 848 ms
+- licence_style_low_light: 91.3% Tamil name:Y PIN:Y 785 ms
+### lines read (fake data)
+- tn_certificate_style_clean: 54பசமடட்‌ டேபோஙப்கோட்‌்-॥ா க௩ட்டடப்பபேயாட்பா | மாதிரி சான்றிதழ்‌ | சான்றிதழ்‌ எண்‌: மாதிரி 2026 0042 | பெயர்‌: செல்வி டெஸ்டா குமாரி | தந்‌ைத பெயர்‌: திரு டெமோ ராமன்‌ | பிறந்த தேதி: 14/08/1990 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர்‌, | சென்னை - 600004 | வட்டம்‌: மயிலாப்பூர்‌ | மாவட்டம்‌: சென்னை | வழங்கிய நாள்‌: 05 ஜனவரி 2026 | இது ஒரு மாதிரி ஆவணம்‌ மட்டுமே
+- tamil_address_block_clean: 5சபிரிடடட்‌ உ௰ட௩55 -॥01 க ௩ட்டடட்பேயாட்வா | பெயர்‌: டெமோ செல்வம்‌ | தந்‌ைத பெயர்‌: டெமோ கணேசன்‌ | கதவு எண்‌ 7, சோதனை வீதி, | அண்ணா நகர்‌, | மதுரை - 625020
+- tn_certificate_style_tilted: ஓதரிரிமடட்‌ கயா _ரு0 க ௩௩௨௩ [9191910110 | மாதிரி சான்றிதழ்‌ | 26 0042 | சான்றிதழ்‌ எண்‌: மாதிரி 20 | தந்‌ைத பெயர்‌: தி | பெயர்‌: செல்வி | டெஸ்டா குமாரி | ரு டெமோ ராமன்‌ | பிறந்த தே | தி: 14/08/1990 | முகவரி: 12, மாதிரி தெ | ௬, மயிலாப்பூர்‌, | சென்னை - 600004 | வட்டம்‌: மயிலாப்பூர்‌ | மாவட்டம்‌: சென்னை | வழங்கிய நாள்‌: 05 | ஜனவரி 2026 | வணம்‌ மட்டுமே | இது ஒரு மாதிரி ஆ
+- tamil_address_block_tilted: ஓதம்‌ 2௦55-௩0 க்கட 0௦௦பாடபா | பெயர்‌: டெமோ செல்வம்‌ | த பெயர்‌: டெமோ கணேசன்‌ | தந்‌ை | கதவு எண்‌ 7 சோதனை வீதி, | அண்ணா நகர்‌, | மதுரை - 625020
+- aadhaar_style_clean: 5 டட்டபாா்பாாா கோம்‌ | வா & 8௩௧௦௦8 - ஈ0ட்காங௦ பெய | ஊஊ ஒர்‌ | ட்5ாக(பங்்கங்‌ | டெஸ்டா குமாரி | எ 199 / 005: 14/08/1990 | ள்ள / “11/௧5 | 001655: 12, கடட 51 ஈட்‌, பாடம்‌, | பேபி ரகடாயம்ப - 600004 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர்‌, | சென்னை, தமிழ்நாடு - 600004 | 9999 4567 1231
+- aadhaar_style_tilted: ஊ ஒன்‌ | ௩5 க பமகஙி | டெஸ்டா குமாரி | 9 / 005: 14/08/1990 | ளை / 11 | 0௦1655: 12, 981/0டட்‌ ஈட்‌, பரடக0ஈட்‌, | பெட்ஙங்து, விரட்‌ டப - 600004 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர்‌, | சென்னை, தமிழ்நாடு - 600004 | 9999 4567 1231
+- licence_style_clean: 541 டட்‌ நஙமாங்ட படேங்டே | ஙா கட்கடட௦பேஙாட்ஙா - பகொடகாய6 டா | மட்‌: 11400 20260001234 | 14௮6: மட்மா௦ கப்பா | பெயர்‌: டெமோ அருண்‌ டெஸ்ட்‌ | 5/0/// ௦: டப்‌//1௦ பு ாட51 | ௦5: 21-01-1992 | 40௦௭655: 45, 1651 1, | ௦1/16 4௦௩௩ - 641001 | முகவரி: 45, சோதனை நகர்‌, | கோயம்புத்தூர்‌ - 641001 | 3/2110 11: 20-01-2042
+- licence_style_tilted: ஓ 21/1டட்‌ 0ஈ | ஙா பங்‌ | [இர] 16) ௦வடா | ஙா க ௩௨ 91919191)114) மல ௦ | டட [௦: 71100 20260001234 | 1௮௪: ௦௩14௦ கபயாடா | பெயர்‌: டெமோ அருண்‌ டெஸ்ட்‌ | 5/0/// 07: 014௦ (6014௧8 51 | 0௦5: 21-01-1992 | 00955: 45, 57 முக்க, | ௦01/6கா௦௩%௩ - 641001 | முகவரி: 45, சோதனை நகர்‌, | தோயம்புத்தூர்‌ - 641001 | ௮1௦ 174: 20-01-2042
+
+
+=================== tesseractBest
+### per sample
+- tn_certificate_style_clean: 100.0% Tamil name:Y PIN:Y Date:Y 786 ms
+- tamil_address_block_clean: 98.9% Tamil name:Y PIN:Y 432 ms
+- tn_certificate_style_tilted: 86.9% Tamil name:Y PIN:Y Date:Y 1053 ms
+- tamil_address_block_tilted: 94.5% Tamil name:Y PIN:Y 515 ms
+- tn_certificate_style_shadow: 92.5% Tamil name:Y PIN:Y Date:Y 795 ms
+- tamil_address_block_shadow: 68.1% Tamil name:N PIN:Y 406 ms
+- aadhaar_style_clean: 100.0% Tamil name:Y PIN:Y 722 ms
+- aadhaar_style_tilted: 98.7% Tamil name:Y PIN:Y 663 ms
+- aadhaar_style_shadow: 100.0% Tamil name:Y PIN:Y 626 ms
+- aadhaar_style_blurred: 100.0% Tamil name:Y PIN:Y 665 ms
+- aadhaar_style_low_light: 100.0% Tamil name:Y PIN:Y 796 ms
+- licence_style_clean: 100.0% Tamil name:Y PIN:Y 962 ms
+- licence_style_tilted: 100.0% Tamil name:Y PIN:Y 880 ms
+- licence_style_shadow: 100.0% Tamil name:Y PIN:Y 774 ms
+- licence_style_blurred: 100.0% Tamil name:Y PIN:Y 842 ms
+- licence_style_low_light: 91.3% Tamil name:Y PIN:Y 889 ms
+### lines read (fake data)
+- tn_certificate_style_clean: ஹாட்‌ மோட - ஙா ௩ ௩௩௩ ற்பபோா£ஙா | மாதிரி சான்றிதழ்‌ | சான்றிதழ்‌ எண்‌: மாதிரி 2026 0042 | பெயர்‌: செல்வி டெஸ்டா குமாரி | தந்தை பெயர்‌: திரு டெமோ ராமன்‌ | பிறந்த தேதி: 14/08/1990 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர்‌, | சென்னை - 600004 | வட்டம்‌: மயிலாப்பூர்‌ | மாவட்டம்‌: சென்னை | வழங்கிய நாள்‌: 05 ஜனவரி 2026 | இது ஒரு மாதிரி ஆவணம்‌ மட்டுமே
+- tamil_address_block_clean: மாடா கற்ப்கா5 - றா மங ம்பபேநாஙஙா | பெயர்‌: டெமோ செல்வம்‌ | தந்தை பெயர்‌: டெமோ கணேசன்‌ | கதவு எண்‌ 7 சோதனை வீதி, | அண்ணா நகர்‌, | மதுரை - 625020
+- tn_certificate_style_tilted: டட ஊணோங்ணாிர்‌ ங்‌ ம 20௦0108011 | மாதிரி சான்றிதழ்‌ | 26 0042 | சான்றிதழ்‌ எண்‌: மாதிரி 20 | தந்தை பெயர்‌: தி | பெயர்‌: செல்வி | டெஸ்டா குமாரி | ர௬ுடெமோ ராமன்‌ | பிறந்த தே | தி: 14/08/1990 | முகவரி: 12, மாதிரி தெ | ௬, மயிலாப்பூர்‌, | சென்னை - 600004 | வட்டம்‌: மயிலாப்பூர்‌ | மாவட்டம்‌: சென்னை | வழங்கிய நாள்‌: 05 | ஜனவரி 2026 | வணம்‌ மட்டுமே | இது ஒரு மாதிரி ஆ
+- tamil_address_block_tilted: 510௨ உமா£55 - 1071 19120 ம௦பரானா | பெயர்‌: டெமோ செல்வம்‌ | த பெயர்‌: டெமோ கணேசன்‌ | தந்‌ை | கதவு எண்‌ 7 சோதனை வீதி, | அண்ணா நகர்‌, | மதுரை - 625020
+- aadhaar_style_clean: ஹாட்டா ்ாாா கோம்‌ | ஙா கக ௦௦௦ - ௩681௩6 00 | கள | 1௨514 |/யராகஙி | டெஸ்டா குமாரி | என 1 / 0௦%: 14/08/1990 | ரீக / பாட | 001௧55: 12, 520400 51௨ 108௦0, | புபங்கி, "வறடபயுகப்ப - 600004 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர்‌, | சென்னை, தமிழ்நாடு - 600004 | 9999 4567 1231
+- aadhaar_style_tilted: னதி | ௨571௩ பங | டெஸ்டா குமாரி | ௭ /0௦06: 14/08/1990 | எள / 814406 | 001655: 12, 51000௩ 511, ட, | பேக னிட ॥1க௦ப - 600004 | முகவரி: 12, மாதிரி தெரு. மயிலாப்பூர்‌, | சென்னை, தமிழ்நாடு - 600004 | 9999 4567 1231
+- licence_style_clean: ஹாட்டா ப்ங்ஙாஙட பணேு | 1101 & 8௨௩ ப்போ - 0 806 ப | பட 11௦: 11400 20260001234 | 1486: பபி40 &%பஙு 1௨51 | பெயர்‌: டெமோ அருண்‌ டெஸ்ட்‌ | ம எ: ப்பா யா ௨81 | ப்ப: 21-01-1992 | 001655: 45, 1௨51 06, | 601048810௩ - 641001 | முகவரி: 45, சோதனை நகர்‌, | கோயம்புத்தூர்‌ - 641001 | 29 1॥: 20-01-2042
+- licence_style_tilted: பிரிட 01 | ங்க பண | 8 1௨5106 ஸப | ஙா கம 0200010811 - 6] | பட 10௦: 11100 20260001234 | 1186: 08100 பங 51 | பெயர்‌: டெமோ அருண்‌ டெஸ்ட்‌ | 5/0/0 0: 021140 601084 1௨51 | 00: 21-01-1992 | 80055: 45, 1௨51 11408௩, | ௦0॥084101 - 641001 | முகவரி: 45, சோதனை நகர்‌, | கோயம்புத்தூர்‌ - 641001 | ராப: 20-01-2042
+
+
+=================== paddleOcr
+### per sample
+- tn_certificate_style_clean: 99.3% Tamil name:N PIN:Y Date:Y 2387 ms
+- tamil_address_block_clean: 86.8% Tamil name:N PIN:Y 1646 ms
+- tn_certificate_style_tilted: 99.6% Tamil name:Y PIN:Y Date:Y 2237 ms
+- tamil_address_block_tilted: 100.0% Tamil name:Y PIN:Y 1501 ms
+- tn_certificate_style_shadow: 98.1% Tamil name:Y PIN:Y Date:Y 2190 ms
+- tamil_address_block_shadow: 73.6% Tamil name:Y PIN:Y 1800 ms
+- aadhaar_style_clean: 73.7% Tamil name:Y PIN:Y 2459 ms
+- aadhaar_style_tilted: 93.4% Tamil name:Y PIN:Y 2006 ms
+- aadhaar_style_shadow: 97.4% Tamil name:Y PIN:Y 2198 ms
+- aadhaar_style_blurred: 93.4% Tamil name:Y PIN:Y 2098 ms
+- aadhaar_style_low_light: 94.7% Tamil name:Y PIN:Y 2550 ms
+- licence_style_clean: 81.2% Tamil name:N PIN:Y 3895 ms
+- licence_style_tilted: 82.6% Tamil name:Y PIN:Y 2359 ms
+- licence_style_shadow: 97.1% Tamil name:Y PIN:Y 2666 ms
+- licence_style_blurred: 95.7% Tamil name:Y PIN:Y 2315 ms
+- licence_style_low_light: 97.1% Tamil name:N PIN:Y 2613 ms
+### lines read (fake data)
+- tn_certificate_style_clean: SAMPLE CERTIFICATE - NOT A REAL DOCUMENT | மாதிரி சான்றிதழ் | சான்றிதழ் எண்: மாதிரி 2026 0042 | பெயர்: செல்வி டெஸ்டா குமொரி | தந்தை பெயர்: திரு டெமொ ராமன் | பிறந்த தேதி: 14/08/1990 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர், | சென்னை - 600004 | வட்டம்: மயிலாப்பூர் | மாவட்டம்: சென்னை | வழங்கிய நாள்: 05 ஜனவரி 2026 | இது ஒரு மாதிரி ஆவணம் மட்டுமே | SAMPLE
+- tamil_address_block_clean: SAMPLE ADDRESS - NOT A REAL DOCUMENT | பெயர்: | டமோ | செல்வம் | தந்தை | பெயர்: | டெமோ கணேசன் | கதவு | எண் 7, சோதனை வீதி, | அண்ணா நகர், | மதுரை - 625020 | SAMPLE
+- tn_certificate_style_tilted: SAMPLE CERTIFICATE - NOT A REAL DOCUMENT | மாதிரி சான்றிதழ் | சான்றிதழ் எண்: மாதிரி 2026 0042 | பெயர்: செல்வி டெஸ்டா குமாரி | தந்தை பெயர்: திரு டெமொோ ராமன் | பிறந்த தேதி: 14/08/1990 | முகவரி: 12, மாதிரி தெரு, மயிலாப்பூர், | சென்னை - 600004 | வட்டம்: மயிலாப்பூர் | மாவட்டம்: சென்னை | வழங்கிய நாள்: 05 ஜனவரி 2026 | இது ஒரு மாதிரி ஆவணம் மட்டுமே | SAMPLE
+- tamil_address_block_tilted: SAMPLE ADDRESS - NOT A REAL DOCUMENT | பெயர்: டெமோ | செல்வம் | தந்தை | பெயர்: டெமோ கணேசன் | கதவு எண் 7, சோதனை வீதி, | அண்ணா நகர், | மதுரை - 625020 | SAMPLE
+- aadhaar_style_clean: SAMPLE IDENTITY | CARD | NOT A REAL DOCUMENT - FOR TESTING ONLY | TESTA KUMARI | டெஸ்டா குமாரி | fafe / DOB: 14/08/1990 | AT / FEMALE | Address: | CHENNAI, | TAMIL NADU - 600004 | முகவரி: 12, | மாதிரி | தெரு, | மயிலாப்பூர், | சென்னை, தமிழ்நாடு - 60004 | 9999 4567 1231
+- aadhaar_style_tilted: SAMPLE IDENTITY CARD | NOT A REAL DOCUMENT - FOR TESTING ONLY | TESTA KUMARI | டெஸ்டா குமாரி | Hfafe / D0B: 14/08/1990 | A / FEMALE | CHENNAI, TAMIL NADU - 600004 | முகவரி: 12, மாதிரி தெரு, | மயிலாப்ப | சென்னை, தமிழ்நாடு - 60004 | 9999 4567 1231
+- licence_style_clean: SAMPLE DRIVING LICENCE | NOT A REAL DOCUMENT - FOR TESTING ONLY | DL No: | TNOO | 20260001234 | Name: | DEMO | ARUN | TEST | பெயர்: | ட | மோ | அருண் டெஸ்ட் | S/D/W | of: | DEMO | KUMAR TEST | DOB: 21-01-1992 | Address: | 45, | TEST NAGAR, | AMPLE | COIMBATORE | I | 641001 | முகவரி: 45, | சோதனை ந | கோயம்புத்தூர் - 641001 | Valid Till: 20-01-2042
+- licence_style_tilted: SAMPLE DRIVING LICENCE | NOT A REAL DOCUMENT - FOR TESTING ONLY | DL No: TN00 20260001234 | Name: | DEMO ARUN TEST | பெயர்: | டெமோ அருண் டெஸ்ட் | S/D/W of: DEMO KUMAR TEST | DOB: 21-01-1992 | Address: 45, TEST NAGAR, | AMPLE | COIMBATORE - 641001 | முகவரி: | 45, | சோதனை ந | கோயம்புத்தூர் - 641001 | Valid Till: 20-01-2042
+
+
+=================== mlKitWithoutTamil
+### per sample
+- tn_certificate_style_clean: 23.6% Tamil name:N PIN:Y Date:Y 377 ms
+- tamil_address_block_clean: 13.2% Tamil name:N PIN:Y 252 ms
+- tn_certificate_style_tilted: 22.5% Tamil name:N PIN:N Date:Y 434 ms
+- tamil_address_block_tilted: 15.4% Tamil name:N PIN:Y 420 ms
+- tn_certificate_style_shadow: 21.7% Tamil name:N PIN:Y Date:Y 373 ms
+- tamil_address_block_shadow: 14.3% Tamil name:N PIN:Y 357 ms
+- aadhaar_style_clean: 25.0% Tamil name:N PIN:Y 404 ms
+- aadhaar_style_tilted: 25.0% Tamil name:N PIN:N 279 ms
+- aadhaar_style_shadow: 26.3% Tamil name:N PIN:Y 452 ms
+- aadhaar_style_blurred: 27.6% Tamil name:N PIN:Y 401 ms
+- aadhaar_style_low_light: 26.3% Tamil name:N PIN:Y 305 ms
+- licence_style_clean: 27.5% Tamil name:N PIN:Y 285 ms
+- licence_style_tilted: 27.5% Tamil name:N PIN:Y 291 ms
+- licence_style_shadow: 27.5% Tamil name:N PIN:Y 394 ms
+- licence_style_blurred: 27.5% Tamil name:N PIN:Y 327 ms
+- licence_style_low_light: 27.5% Tamil name:N PIN:Y 295 ms
+### lines read (fake data)
+- tn_certificate_style_clean: SAMPLE CERTIFICATE - NOT A REAL D০cUMENT | uDrgf माsTplsp | ET68TIDl5) 6T660T: LDITEf 2026 0042 | Ouwj: Qssu lL6ULIT (GDmf | छ uUJ: ( GLGDm ঢTD6 | जphg G5ुकी: 14/08/1990 | puf: 12, torHhf Gচঢ, LDu56uTtdj, | ০৮০া6O60 - 600004 | 6LLLD: LouluTÜHI | LDTULLLh: B6া607 | 6plu HITSiT: O5 ०0f 2026 | gW Drgf ुuSooTLD LDLGGD | SAMPLE
+- tamil_address_block_clean: SAMPLE ADDRESS - NOT A REAL DOCUMENT | Guwj: GLBLoT Q6UGJD | 556০ 6uuj: ০L GDr sCo০07860T | क5 6া6o0া 7, GET্ত 60607 6f6, | অ০া600ाT 5চj, | LD5J60T - 625020 | SAMPLE
+- tn_certificate_style_tilted: SAMPLE CERTIFICATE- NOT A REAL DOCUMENT | Drf माঠো9l5p | मাTOTppp srooo7: uDTrছ)f 2026 0042 | UJj: #60h 6L6ULT (ভDTr) | 5টছ uurj: कh GLGLD যTLD6 | Lpbs Gs6l: 14/08/1990 | pJ: 12, Drff GছG, Df6orti,Jं, | LDITHhfी | E60া660 - 60০০০4 | 6JLLLD: DulouTİ4I | LDTouLLD: G৮6ठা60607 | 6urilw BT6İT: 05 g60T6Uf 2026 | SAMPLE)
+- tamil_address_block_tilted: SAMPLE ADDRESS - NOT A REAL DOCUMENT | uwj: GLCLOT | ssUOJD | 5৪ ০LUUJ: GLGoT 5৫o078607 | 04 6া600া 7, 6FTE6060ा 6, | y600T600TIT BBJ, | LDGJ60J - 625020 | SAMPLE
+- aadhaar_style_clean: SAMPLE IDENTITY CARD | NOT A REAL DOCUMENT - FOR TESTING ONLY | टेस्टा कुमारी | TESTA KUMARI | LULT (ভDrf। | जन्म तिथि / DOB: 14/08/1990 | महिला/ FEMALE | PLE | Address: 12, SAMPLE STREET, MYLAPORE, | CHENNAI, TAMIL NADU - 600004 | कf: 12, LDTgf GE, DuIl6oTrdJ | G6016060, कDीp5r6 - 600004 | 9999 4567 1231
+- aadhaar_style_tilted: SAMPLE IDENTITY CARD | NOT A REAL DOCUMENT - FOR TESTING ONLY | टेस्टा कुमारी | TESTA KUMARI | L6UL (ভDTf) | जन्म तिथि/ DOB: 14/08/1990 | महिला/ FEMALE | গPLE | Address: 12, SAMPLE STREET, MYLAPORE, | CHENNAI, TAML NADU - 6000০4 | (psufl: 12, LDß)rfl Gs6, LDuoumÜİ, | 6৮sO60, DlupHrG - 600০০4 | 9999 4567 1231
+- licence_style_clean: SAMPLE DRIVING LICENCE | NOT A REAL DOCUMENT - FOR TESTING ONLY | DL No: TNO0 20260001234 | Name: DEMO ARUN TEST | ০LUয: LGLDT অ(UH600 GL6dL- | S/D/W of: DEMO KUMAR TEST | DOB: 21-01-1992 | Address: 45, TEST NAGAR, | AMPLE | COIMBATORE - 641001 | (pB6ufl: 45, Gemg60)60T b5j, | GTUILDL छ - 647001 | Valid Till: 20-01-2042
+- licence_style_tilted: SAMPLE DRIVING LICENCE | NOT A REAL DOCUMENT - FOR TESTING ONLY | DL No: TNO0 20260001234 | Name: DEMO ARUN TEST | GuLJ: GLGDr অ(চচ০ণা LsyL | S/D/W of: DEM০ KUMAR TEST | DOB: 21-01-1992 | Address: 45, TEST NAGAR, | AMPLE। | COIMBATORE - 641001 | pu: 45, G#T56০607 5, | GsTWLDyH5Tİ - 641001 | Valid Till: 20-01-2042
+
+

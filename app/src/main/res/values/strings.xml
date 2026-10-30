@@ -161,6 +161,8 @@
     <string name="licence_name_mlkit">ML Kit Text Recognition (Google)</string>
     <string name="licence_type_mlkit">ML Kit Terms of Service: free to use, not open source</string>
     <string name="licence_note_mlkit">ML Kit reads text in your documents on this phone only. Its reading models are built into Hey Buddy, so nothing is ever downloaded or sent. It is free to use under Google\'s ML Kit Terms of Service (part of the Google APIs Terms of Service), but it is not open source. Below are the licences of the open-source parts it contains.</string>
+    <string name="licence_name_tesseract">Tesseract OCR and its Tamil model (Tesseract4Android, Leptonica, libjpeg, libpng)</string>
+    <string name="licence_type_tesseract">Apache License 2.0, with BSD-style, IJG and libpng licences for its parts</string>
     <string name="licence_type_sqlcipher">BSD-style licence (Zetetic LLC); includes SQLite (public domain)</string>
     <string name="add_document_button">Add document</string>
     <string name="vault_title">Your vault</string>

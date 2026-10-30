@@ -36,10 +36,13 @@ object PhotoEffects {
 
     /** The card lying on a table; tilted means about 4 degrees with a little perspective. */
     private fun onTable(card: Bitmap, tilted: Boolean): Bitmap {
-        val photo = createBitmap(PHOTO_WIDTH, PHOTO_HEIGHT)
+        // The table shows around the page, so any page size fits (a card gives 1800 x 1300).
+        val photoWidth = card.width + TABLE_BORDER_X
+        val photoHeight = card.height + TABLE_BORDER_Y
+        val photo = createBitmap(photoWidth, photoHeight)
         photo.eraseColor(TABLE_COLOUR)
-        val left = (PHOTO_WIDTH - card.width) / 2f
-        val top = (PHOTO_HEIGHT - card.height) / 2f
+        val left = (photoWidth - card.width) / 2f
+        val top = (photoHeight - card.height) / 2f
         val right = left + card.width
         val bottom = top + card.height
         val source = floatArrayOf(0f, 0f, card.width.toFloat(), 0f, card.width.toFloat(), card.height.toFloat(), 0f, card.height.toFloat())
@@ -111,8 +114,8 @@ object PhotoEffects {
         }
     }
 
-    private const val PHOTO_WIDTH = 1800
-    private const val PHOTO_HEIGHT = 1300
+    private const val TABLE_BORDER_X = 200
+    private const val TABLE_BORDER_Y = 290
     private val TABLE_COLOUR = Color.rgb(132, 118, 100)
     private const val CORNERS = 4
     private const val SHADOW_ALPHA = 150

@@ -111,7 +111,7 @@ object FakeDocuments {
  * default: on the owner's Realme phone that is a decorative font whose "D" looks like "O", which
  * would measure the font, not the reader. Hindi and Tamil letters fall back to the phone's Noto fonts.
  */
-private object SampleFonts {
+internal object SampleFonts {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     val regular: Typeface = checkNotNull(ResourcesCompat.getFont(context, R.font.inter_regular))
     val bold: Typeface = checkNotNull(ResourcesCompat.getFont(context, R.font.inter_semibold))

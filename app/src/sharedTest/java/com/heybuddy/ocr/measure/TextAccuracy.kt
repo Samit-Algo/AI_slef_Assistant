@@ -1,6 +1,6 @@
 package com.heybuddy.ocr.measure
 
-import java.text.Normalizer
+import com.heybuddy.util.TamilText
 
 /**
  * The maths for the Task 2.2 accuracy measurement. Test code only (never in the app).
@@ -22,8 +22,10 @@ object TextAccuracy {
      * @return The cleaned text.
      */
     fun clean(text: String): String {
-        val composed = Normalizer.normalize(text, Normalizer.Form.NFC)
-        return composed.trim().replace(WHITESPACE, " ")
+        // The app's shared cleanup (NFC, invisible joiners, Tamil vowel-sign order): the app sees the
+        // read text only after it, so it is measured the same way.
+        val cleaned = TamilText.clean(text)
+        return cleaned.trim().replace(WHITESPACE, " ")
     }
 
     /**

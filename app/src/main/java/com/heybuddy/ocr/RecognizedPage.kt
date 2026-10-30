@@ -24,8 +24,9 @@ data class LineBox(val left: Int, val top: Int, val right: Int, val bottom: Int)
  *
  * @property text What was read.
  * @property box Where it was found, or null if the engine did not say.
+ * @property confidence How sure the engine was, from 0 to 1, or null if it did not say.
  */
-data class RecognizedLine(val text: String, val box: LineBox?)
+data class RecognizedLine(val text: String, val box: LineBox?, val confidence: Float? = null)
 
 /**
  * Everything read from one page, in reading order. Lives only in memory (spec 7.3-2): drop every

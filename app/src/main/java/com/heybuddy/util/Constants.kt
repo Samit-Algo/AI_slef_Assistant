@@ -152,3 +152,35 @@ const val READING_LONG_SIDE_PIXELS: Int = 2048
 
 /** Most pages of one PDF page-file that are read for details (a certificate rarely has more). */
 const val MAX_PDF_PAGES_TO_READ: Int = 5
+
+/**
+ * Folder in noBackupFilesDir for the OCR model files that must be real files (Tesseract). Only the
+ * public models live there, never anyone's data (Task 2.3).
+ */
+const val OCR_MODELS_FOLDER_NAME: String = "ocr_models"
+
+/** Tesseract's name for the Tamil model ("tam"). */
+const val TAMIL_MODEL_LANGUAGE: String = "tam"
+
+/**
+ * The official Tamil "fast" model inside the app's assets (tessdata_fast, Apache 2.0; checksum in
+ * docs/TESSERACT_BUILD.md). Stored uncompressed (build.gradle.kts), so its size can be checked.
+ */
+const val TAMIL_MODEL_ASSET: String = "tessdata/tam.traineddata"
+
+// Merging ML Kit's and Tesseract's lines (spec 7.4a); see LineMerge for the rule. Set from the
+// confidence values measured on the 31 fake samples in Task 2.3 (owner's phone): ML Kit's real
+// English/Hindi lines 0.71-0.94, its Tamil garbage 0.18-0.64; Tesseract's real Tamil 0.88-0.96, its
+// garbage on English/Hindi 0.00-0.72. The gaps are left as "unsure", where BOTH lines are kept.
+
+/** Below this, ML Kit itself says the line is very likely wrong: treated as garbage. */
+const val MERGE_ML_KIT_GARBAGE_BELOW: Float = 0.5f
+
+/** From this up, a line with only Latin/Devanagari letters is treated as real English or Hindi. */
+const val MERGE_ML_KIT_REAL_FROM: Float = 0.7f
+
+/** From this up, Tesseract is sure enough of a mostly-Tamil line to let it replace ML Kit's garbage. */
+const val MERGE_TAMIL_SURE_FROM: Float = 0.8f
+
+/** Share of a Tesseract line's letters that must be Tamil for it to count as a Tamil line. */
+const val MERGE_MIN_TAMIL_SHARE: Float = 0.8f

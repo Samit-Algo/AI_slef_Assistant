@@ -21,7 +21,9 @@ import com.heybuddy.settings.SharedPreferencesStore
 import com.heybuddy.ui.AutoLockController
 import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ocr.DocumentPageReader
+import com.heybuddy.ocr.MergedTextReader
 import com.heybuddy.ocr.MlKitTextReader
+import com.heybuddy.ocr.TesseractTextReader
 import com.heybuddy.ocr.ReadingSession
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.ui.adddocument.PagePreparer
@@ -143,8 +145,15 @@ class AppContainer(private val appContext: Context) {
     /** Reading results of this unlocked session; cleared on every lock (spec 7.3-2). */
     val readingSession: ReadingSession = ReadingSession(vaultLockState)
 
-    /** Reads vault pages on the phone (ML Kit; the engine starts on first use). */
-    val documentPageReader: DocumentPageReader = DocumentPageReader(vaultRepository, MlKitTextReader(), readingSession)
+    /**
+     * Reads vault pages on the phone: ML Kit (English, Hindi) and Tesseract (Tamil), merged (spec
+     * 7.4a). Both engines start on first use, so creating them here costs nothing.
+     */
+    val documentPageReader: DocumentPageReader = DocumentPageReader(
+        repository = vaultRepository,
+        reader = MergedTextReader(MlKitTextReader(), TesseractTextReader(appContext)),
+        session = readingSession,
+    )
 
     // For app-wide background work that must not depend on any screen (orphan cleanup).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

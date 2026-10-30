@@ -55,7 +55,7 @@ class MlKitTextReader : TextReader {
             for (line in block.lines) {
                 val bounds = line.boundingBox
                 val box = bounds?.let { rect -> LineBox(rect.left, rect.top, rect.right, rect.bottom) }
-                lines.add(RecognizedLine(line.text, box))
+                lines.add(RecognizedLine(line.text, box, line.confidence))
             }
         }
         return lines

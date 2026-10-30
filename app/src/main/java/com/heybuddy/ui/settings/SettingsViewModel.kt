@@ -48,6 +48,9 @@ enum class LicenceEntry(
     // Not open source itself: ML Kit's terms are summarised in the note; the text below it lists
     // the open-source parts ML Kit bundles (spec 7.4).
     ML_KIT(R.string.licence_name_mlkit, R.string.licence_type_mlkit, R.raw.licence_mlkit_third_party, R.string.licence_note_mlkit),
+
+    // Tamil reading (Task 2.3): Tesseract and the parts built into it, each with its own licence.
+    TESSERACT(R.string.licence_name_tesseract, R.string.licence_type_tesseract, R.raw.licence_tesseract),
 }
 
 /**
