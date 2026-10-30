@@ -46,13 +46,18 @@ abstract class DocumentDao {
 
     /**
      * Removes one page (and with it the page's wrapped key), then numbers the rest 0, 1, 2… again.
+     * The details read from the page are deleted, or kept as "page deleted", in the SAME transaction
+     * (spec 7.10), and before the page row goes, while they can still be found by its id.
      *
      * @param documentId The page's document.
      * @param pageId The page to remove.
      * @param updatedAt The time of the change.
+     * @param keepDetails False (the default answer "Yes, delete them") deletes the page's details.
      */
     @Transaction
-    open suspend fun removePageAndRenumber(documentId: String, pageId: String, updatedAt: Long) {
+    open suspend fun removePageAndRenumber(documentId: String, pageId: String, updatedAt: Long, keepDetails: Boolean) {
+        if (keepDetails) keepDetailsOfPage(pageId, updatedAt) else deleteDetailsOfPage(pageId)
+        repairChosenDetails()
         deletePageRow(pageId)
         val remaining = pagesOf(documentId)
         val changes = positionChangesAfterRemoval(remaining.map { page -> PagePosition(page.pageId, page.position) })
@@ -67,12 +72,19 @@ abstract class DocumentDao {
     /**
      * Deletes a document and all of its page rows (with their wrapped keys) together.
      *
+     * The details read from the document are deleted, or kept as "page deleted", in the SAME
+     * transaction (spec 7.10).
+     *
      * @param documentId The document's id.
+     * @param keepDetails False (the default answer "Yes, delete them") deletes the document's details.
+     * @param now The time of the change.
      * @return The ids of the deleted pages (their files can now be deleted), or empty if there was
      *   no such document.
      */
     @Transaction
-    open suspend fun deleteDocumentWithPages(documentId: String): List<String> {
+    open suspend fun deleteDocumentWithPages(documentId: String, keepDetails: Boolean, now: Long): List<String> {
+        if (keepDetails) keepDetailsOfDocument(documentId, now) else deleteDetailsOfDocument(documentId)
+        repairChosenDetails()
         val pageIds = pagesOf(documentId).map { page -> page.pageId }
         deletePagesOf(documentId)
         deleteDocumentRow(documentId)
@@ -139,6 +151,21 @@ abstract class DocumentDao {
      */
     @Query("UPDATE documents SET displayName = :displayName, updatedAt = :updatedAt WHERE id = :id")
     abstract suspend fun rename(id: String, displayName: String, updatedAt: Long): Int
+
+    @Query("UPDATE profile_facts SET pageId = NULL, sourceDeletedAt = :now WHERE pageId = :pageId")
+    protected abstract suspend fun keepDetailsOfPage(pageId: String, now: Long)
+
+    @Query("DELETE FROM profile_facts WHERE pageId = :pageId")
+    protected abstract suspend fun deleteDetailsOfPage(pageId: String)
+
+    @Query("UPDATE profile_facts SET documentId = NULL, pageId = NULL, sourceDeletedAt = :now WHERE documentId = :documentId")
+    protected abstract suspend fun keepDetailsOfDocument(documentId: String, now: Long)
+
+    @Query("DELETE FROM profile_facts WHERE documentId = :documentId")
+    protected abstract suspend fun deleteDetailsOfDocument(documentId: String)
+
+    @Query(REPAIR_CHOSEN_SQL)
+    protected abstract suspend fun repairChosenDetails()
 
     /**
      * Adds a document row on its own.

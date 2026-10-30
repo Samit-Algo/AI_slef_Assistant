@@ -291,18 +291,20 @@ class VaultRepository(
      *
      * @param documentId The page's document.
      * @param pageId The page to remove.
+     * @param keepDetails True to keep the details read from this page (shown as "page deleted");
+     *   false, the default answer, deletes them with the page (spec 7.10).
      * @throws PageNotFoundException If the document has no such page.
      * @throws LastPageException If it is the only page (delete the document instead).
      * @throws VaultLockedException If the vault is locked.
      */
-    suspend fun removePage(documentId: String, pageId: String) {
+    suspend fun removePage(documentId: String, pageId: String, keepDetails: Boolean = false) {
         withContext(ioDispatcher + NonCancellable) {
             holder.withDatabase { database ->
                 val dao = database.documentDao()
                 val pages = dao.pagesOf(documentId)
                 if (pages.none { page -> page.pageId == pageId }) throw PageNotFoundException()
                 if (pages.size == 1) throw LastPageException()
-                dao.removePageAndRenumber(documentId, pageId, clock())
+                dao.removePageAndRenumber(documentId, pageId, clock(), keepDetails)
                 fileCrypto.encryptedFileFor(pageId).delete()
             }
         }
@@ -403,12 +405,14 @@ class VaultRepository(
      * dies in between, only unreadable files are left, and the orphan cleanup removes them.
      *
      * @param documentId The document's id.
+     * @param keepDetails True to keep the details read from this document (shown as "page
+     *   deleted"); false, the default answer, deletes them with it (spec 7.10).
      * @throws VaultLockedException If the vault is locked.
      */
-    suspend fun deleteDocument(documentId: String) {
+    suspend fun deleteDocument(documentId: String, keepDetails: Boolean = false) {
         withContext(ioDispatcher + NonCancellable) {
             holder.withDatabase { database ->
-                val pageIds = database.documentDao().deleteDocumentWithPages(documentId)
+                val pageIds = database.documentDao().deleteDocumentWithPages(documentId, keepDetails, clock())
                 deleteFiles(pageIds)
             }
         }

@@ -14,11 +14,11 @@ import androidx.room.migration.Migration
  * app/schemas (kept in git, no user data inside) so those migrations can be written and tested.
  *
  * Versions: 1 = one file per document (Tasks 1.6 to 1.10); 2 = documents with pages (Task 1.10p,
- * see [MIGRATION_1_2]).
+ * see [MIGRATION_1_2]); 3 = the confirmed profile details (Task 2.8, see [MIGRATION_2_3]).
  */
 @Database(
-    entities = [DocumentEntity::class, DocumentPageEntity::class],
-    version = 2,
+    entities = [DocumentEntity::class, DocumentPageEntity::class, ProfileFactEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class VaultDatabase : RoomDatabase() {
@@ -26,9 +26,12 @@ abstract class VaultDatabase : RoomDatabase() {
     /** Access to the `documents` and `document_pages` tables. */
     abstract fun documentDao(): DocumentDao
 
+    /** Access to the `profile_facts` table. */
+    abstract fun profileFactDao(): ProfileFactDao
+
     /** Every migration, in order. The holder adds them all when it opens the database. */
     companion object {
         /** All migrations, oldest first. */
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

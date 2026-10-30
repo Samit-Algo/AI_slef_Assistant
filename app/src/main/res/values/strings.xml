@@ -83,6 +83,16 @@
     <string name="add_page_dialog_title">Add a page</string>
     <string name="add_page_dialog_body">Where is the new page?</string>
     <string name="add_page_dialog_camera">Take photo</string>
+    <plurals name="delete_details_from_document">
+        <item quantity="one">Also delete the %1$d detail read from this document?</item>
+        <item quantity="other">Also delete the %1$d details read from this document?</item>
+    </plurals>
+    <plurals name="delete_details_from_page">
+        <item quantity="one">Also delete the %1$d detail read from this page?</item>
+        <item quantity="other">Also delete the %1$d details read from this page?</item>
+    </plurals>
+    <string name="delete_details_yes">Yes, delete them</string>
+    <string name="delete_details_no">No, keep them in My details</string>
     <string name="add_page_dialog_photos">Photos</string>
     <string name="add_page_dialog_files">PDF or file</string>
     <string name="remove_page_title">Remove this page?</string>

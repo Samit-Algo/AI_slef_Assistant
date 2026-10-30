@@ -49,3 +49,24 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         db.execSQL("DROP TABLE `documents_v1`")
     }
 }
+
+/**
+ * Version 2 → 3 (Task 2.8): the confirmed profile details. Only ADDS the `profile_facts` table and
+ * its two indexes; no existing row changes. The statements are copied exactly from
+ * app/schemas/.../3.json; Room checks the result against that layout after migrating.
+ */
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `profile_facts` (`factId` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                "`value` TEXT NOT NULL, `documentId` TEXT, `pageId` TEXT, `sourceDeletedAt` INTEGER, " +
+                "`origin` TEXT NOT NULL, `chosen` INTEGER NOT NULL, `confirmedAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`factId`), " +
+                "FOREIGN KEY(`documentId`) REFERENCES `documents`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , " +
+                "FOREIGN KEY(`pageId`) REFERENCES `document_pages`(`pageId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_profile_facts_documentId` ON `profile_facts` (`documentId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_profile_facts_pageId` ON `profile_facts` (`pageId`)")
+    }
+}

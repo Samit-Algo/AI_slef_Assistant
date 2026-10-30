@@ -366,6 +366,8 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
                     tempFileCleaner = container.tempFileCleaner,
                     preparer = container.pagePreparer,
                     saver = container.addDocumentSaver,
+                    countDocumentDetails = container.profileRepository::countForDocument,
+                    countPageDetails = container.profileRepository::countForPage,
                 )
             }
         },
@@ -429,6 +431,7 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
             onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
             onSuccessNoticeShown = viewerViewModel::clearSuccessNotice,
             onTakePhotoClick = if (phoneHasCamera(activity)) ({ cameraOpen = true }) else null,
+            onDeleteDetailsChoice = viewerViewModel::onDeleteDetailsChoice,
         ),
     )
 }

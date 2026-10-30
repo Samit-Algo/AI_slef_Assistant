@@ -1,5 +1,13 @@
 package com.heybuddy.ui.viewer
 
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.selectable
+import androidx.annotation.StringRes
+import androidx.annotation.PluralsRes
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -96,6 +104,8 @@ private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { 
  * @property onBeforeExternalScreen Called right before a picker opens (one-time auto-lock pass, rule 9).
  * @property onSuccessNoticeShown The success message has been on screen long enough.
  * @property onTakePhotoClick "Take photo" in "Add a page", or null on phones without a camera (hidden).
+ * @property onDeleteDetailsChoice "Yes, delete them" (true) or "No, keep them" (false) for the
+ *   details read from what is being deleted.
  */
 class ViewerActions(
     val onBack: () -> Unit,
@@ -119,6 +129,7 @@ class ViewerActions(
     val onBeforeExternalScreen: () -> Unit = {},
     val onSuccessNoticeShown: () -> Unit = {},
     val onTakePhotoClick: (() -> Unit)? = null,
+    val onDeleteDetailsChoice: (Boolean) -> Unit = {},
 )
 
 /**
@@ -389,6 +400,7 @@ private fun ViewerDialogs(uiState: ViewerUiState, actions: ViewerActions) {
             confirmText = stringResource(R.string.delete_one_confirm),
             onCancel = actions.onDeleteDismiss,
             onConfirm = actions.onDeleteConfirm,
+            extraContent = detailsChoice(uiState, R.plurals.delete_details_from_document, actions),
         )
     }
     if (uiState.removePageConfirmOpen) {
@@ -398,10 +410,41 @@ private fun ViewerDialogs(uiState: ViewerUiState, actions: ViewerActions) {
             confirmText = stringResource(R.string.remove_page_confirm),
             onCancel = actions.onRemovePageDismiss,
             onConfirm = actions.onRemovePageConfirm,
+            extraContent = detailsChoice(uiState, R.plurals.delete_details_from_page, actions),
         )
     }
     // Always composed, so the picker result still arrives after the dialog has closed.
     AddPageChoice(open = uiState.addPageChoiceOpen, actions = actions)
+}
+
+/**
+ * "Also delete the N details read from this…?" (spec 7.10), Yes selected by default. Only when
+ * there are details; otherwise the dialog stays exactly as before.
+ */
+private fun detailsChoice(uiState: ViewerUiState, @PluralsRes question: Int, actions: ViewerActions): (@Composable () -> Unit)? {
+    val count = uiState.detailsOnDelete
+    if (count == 0) return null
+    return {
+        Column(modifier = Modifier.selectableGroup()) {
+            Text(text = pluralStringResource(question, count, count), style = MaterialTheme.typography.bodyMedium)
+            DetailsChoiceRow(R.string.delete_details_yes, selected = uiState.deleteDetailsToo) { actions.onDeleteDetailsChoice(true) }
+            DetailsChoiceRow(R.string.delete_details_no, selected = !uiState.deleteDetailsToo) { actions.onDeleteDetailsChoice(false) }
+        }
+    }
+}
+
+@Composable
+private fun DetailsChoiceRow(@StringRes label: Int, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = Dimens.MinTouchTarget)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(text = stringResource(label), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = Dimens.SpaceS))
+    }
 }
 
 /**

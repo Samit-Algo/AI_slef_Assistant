@@ -3,6 +3,7 @@ package com.heybuddy
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.os.storage.StorageManager
+import com.heybuddy.data.ProfileRepository
 import com.heybuddy.data.VaultDatabaseHolder
 import com.heybuddy.data.VaultEraser
 import com.heybuddy.data.VaultFiles
@@ -141,6 +142,9 @@ class AppContainer(private val appContext: Context) {
 
     /** Saves pending pages as a new document, or adds them to an existing one. */
     val addDocumentSaver: AddDocumentSaver = AddDocumentSaver(vaultRepository)
+
+    /** The confirmed profile details, in the same encrypted database (spec 7.10). */
+    val profileRepository: ProfileRepository = ProfileRepository(databaseHolder)
 
     /** Reading results of this unlocked session; cleared on every lock (spec 7.3-2). */
     val readingSession: ReadingSession = ReadingSession(vaultLockState)

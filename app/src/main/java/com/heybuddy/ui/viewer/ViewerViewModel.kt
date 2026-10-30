@@ -98,6 +98,9 @@ data class RenameDialogState(
  * @property addingPages True while picked pages are being added.
  * @property removePageConfirmOpen True while "Remove this page?" is showing.
  * @property removingPage True while a page is being removed.
+ * @property detailsOnDelete How many saved details were read from what the open delete or remove
+ *   dialog would delete; 0 shows the dialog exactly as before (spec 7.10).
+ * @property deleteDetailsToo The user's answer to "Also delete the N details…?" (Yes by default).
  */
 data class ViewerUiState(
     val stage: ViewerStage = ViewerStage.OPENING,
@@ -120,6 +123,8 @@ data class ViewerUiState(
     val addingPages: Boolean = false,
     val removePageConfirmOpen: Boolean = false,
     val removingPage: Boolean = false,
+    val detailsOnDelete: Int = 0,
+    val deleteDetailsToo: Boolean = true,
 ) {
     /** True when there is a PDF page before the current one. */
     val hasPreviousPage: Boolean
@@ -155,6 +160,8 @@ data class ViewerUiState(
  * @param tempFileCleaner Empties view_tmp.
  * @param preparer Turns picked files into pending pages ("Add page").
  * @param saver Adds pending pages to the document.
+ * @param countDocumentDetails How many saved details were read from a document (delete dialog).
+ * @param countPageDetails How many saved details were read from a page (remove dialog).
  */
 class ViewerViewModel(
     private val repository: VaultRepository,
@@ -164,6 +171,8 @@ class ViewerViewModel(
     private val tempFileCleaner: TempFileCleaner,
     private val preparer: PagePreparer,
     private val saver: AddDocumentSaver,
+    private val countDocumentDetails: suspend (String) -> Int = { 0 },
+    private val countPageDetails: suspend (String) -> Int = { 0 },
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(ViewerUiState())
@@ -291,7 +300,18 @@ class ViewerViewModel(
     fun openDelete() {
         val current = mutableUiState.value
         if (!current.documentLoaded || current.busy) return
-        mutableUiState.value = current.copy(deleteConfirmOpen = true, notice = null)
+        mutableUiState.value = current.copy(deleteConfirmOpen = true, notice = null, detailsOnDelete = 0, deleteDetailsToo = true)
+        val documentId = currentDocumentId ?: return
+        viewModelScope.launch { showDetailsCount { countDocumentDetails(documentId) } }
+    }
+
+    /**
+     * The answer to "Also delete the N details read from this…?" in the delete or remove dialog.
+     *
+     * @param deleteToo True for "Yes, delete them" (the default), false for "No, keep them".
+     */
+    fun onDeleteDetailsChoice(deleteToo: Boolean) {
+        mutableUiState.value = mutableUiState.value.copy(deleteDetailsToo = deleteToo)
     }
 
     /** Closes "Delete this document?" without deleting. */
@@ -310,9 +330,10 @@ class ViewerViewModel(
         val documentId = currentDocumentId ?: return
         val current = mutableUiState.value
         if (!current.deleteConfirmOpen) return
+        val keepDetails = current.detailsOnDelete > 0 && !current.deleteDetailsToo
         mutableUiState.value = current.copy(deleteConfirmOpen = false, deleting = true)
         release()
-        viewModelScope.launch { deleteAndLeave(documentId) }
+        viewModelScope.launch { deleteAndLeave(documentId, keepDetails) }
     }
 
     /** Opens "Add a page" (choose photos or a file). Explains the limit instead if it is reached. */
@@ -383,7 +404,9 @@ class ViewerViewModel(
     fun openRemovePage() {
         val current = mutableUiState.value
         if (current.documentPageCount < 2 || current.busy) return
-        mutableUiState.value = current.copy(removePageConfirmOpen = true, notice = null)
+        mutableUiState.value = current.copy(removePageConfirmOpen = true, notice = null, detailsOnDelete = 0, deleteDetailsToo = true)
+        val page = pages.getOrNull(current.documentPageIndex) ?: return
+        viewModelScope.launch { showDetailsCount { countPageDetails(page.pageId) } }
     }
 
     /** Closes "Remove this page?" without removing. */
@@ -406,10 +429,11 @@ class ViewerViewModel(
         val current = mutableUiState.value
         if (!current.removePageConfirmOpen) return
         val page = pages.getOrNull(current.documentPageIndex) ?: return
+        val keepDetails = current.detailsOnDelete > 0 && !current.deleteDetailsToo
         mutableUiState.value = current.copy(removePageConfirmOpen = false, removingPage = true)
         // Nothing decrypted from this page may outlive it.
         releasePage()
-        viewModelScope.launch { removePageAndShowNext(prompt, documentId, page.pageId, current.documentPageIndex) }
+        viewModelScope.launch { removePageAndShowNext(prompt, documentId, page.pageId, current.documentPageIndex, keepDetails) }
     }
 
     /** Called once the success message has been shown long enough. */
@@ -636,9 +660,9 @@ class ViewerViewModel(
         reloadAndShow(prompt, documentId, firstNewPage)
     }
 
-    private suspend fun removePageAndShowNext(prompt: ReAuthPrompt, documentId: String, pageId: String, removedIndex: Int) {
+    private suspend fun removePageAndShowNext(prompt: ReAuthPrompt, documentId: String, pageId: String, removedIndex: Int, keepDetails: Boolean) {
         try {
-            repository.removePage(documentId, pageId)
+            repository.removePage(documentId, pageId, keepDetails)
         } catch (locked: VaultLockedException) {
             // The lock listener already cleared the screen.
             return
@@ -660,9 +684,20 @@ class ViewerViewModel(
 
     private fun isStillShowing(documentId: String): Boolean = !released && documentId == currentDocumentId
 
-    private suspend fun deleteAndLeave(documentId: String) {
+    /** Fills in the number of details for the open dialog; on any problem the dialog stays as before. */
+    private suspend fun showDetailsCount(count: suspend () -> Int) {
+        val details = try {
+            count()
+        } catch (failed: Exception) {
+            0
+        }
+        val current = mutableUiState.value
+        if (current.deleteConfirmOpen || current.removePageConfirmOpen) mutableUiState.value = current.copy(detailsOnDelete = details)
+    }
+
+    private suspend fun deleteAndLeave(documentId: String, keepDetails: Boolean) {
         try {
-            repository.deleteDocument(documentId)
+            repository.deleteDocument(documentId, keepDetails)
         } catch (locked: VaultLockedException) {
             // The lock listener already cleared the screen; the delete can be done after unlock.
             return

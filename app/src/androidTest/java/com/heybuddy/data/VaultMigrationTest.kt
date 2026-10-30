@@ -28,13 +28,13 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 /**
- * The real database migration from version 1 (one file per document) to version 2 (pages),
- * Task 1.10p. Never destructive: every old document must still open, with exactly its old bytes.
+ * The real database migrations: version 1 (one file per document) → 2 (pages, Task 1.10p) → 3
+ * (profile details, Task 2.8). Never destructive: every old document must still open, with exactly
+ * its old bytes.
  *
- * Each test builds a real, encrypted version-1 database from the saved version-1 layout
- * (app/schemas/.../1.json, as Room's own test helper would), then lets the app's own database code
- * open it. Room runs [MIGRATION_1_2] and then checks the result against the version-2 layout; any
- * difference fails the open. (Room's test helper itself cannot run here: it needs a newer JSON
+ * Each test builds a real, encrypted old database from the saved layout (app/schemas/.../1.json or
+ * 2.json, as Room's own test helper would), then lets the app's own database code open it. Room runs
+ * the migrations and then checks the result against the newest layout; any difference fails the open. (Room's test helper itself cannot run here: it needs a newer JSON
  * library than the one the app already ships.)
  *
  * Uses a test vault only (own database, folders and keys, deleted after every test).
@@ -66,7 +66,7 @@ class VaultMigrationTest {
             insertVersion1Row(database, DOCUMENT_B, "Sample certificate", "CERTIFICATE", MIME_PDF, sizeBytes = 5678, wrappedKey = byteArrayOf(4, 5))
         }
 
-        // Opening runs the migration, and Room checks the result against the version-2 layout.
+        // Opening runs the migrations (1 → 2 → 3), and Room checks the result against the newest layout.
         vault.unlock()
         val (documents, pages, version) = vault.holder.withDatabase { room ->
             val migrated = room.openHelper.writableDatabase
@@ -77,7 +77,7 @@ class VaultMigrationTest {
             )
         }
 
-        assertEquals(VERSION_2, version)
+        assertEquals(VERSION_LATEST, version)
         assertEquals(
             listOf(
                 listOf(DOCUMENT_A, "Sample photo", "PHOTO", "100", "200"),
@@ -143,12 +143,45 @@ class VaultMigrationTest {
         assertArrayEquals(newBytes, openOnlyPage(DOCUMENT_A))
     }
 
+    /** Task 2.8: a version-2 vault (with pages) opens as version 3, unchanged, with an empty details table. */
+    @Test
+    fun aVersion2VaultGetsAnEmptyDetailsTableAndKeepsEverything() = runBlocking {
+        val photo = TestVault.sampleJpegBytes()
+        val photoKey = writeOldStyleFile(DOCUMENT_A, photo)
+        createDatabase(VERSION_2_SCHEMA, VERSION_2) { database ->
+            database.execSQL(
+                "INSERT INTO documents (id, displayName, type, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any>(DOCUMENT_A, "Sample photo", "PHOTO", CREATED_AT, UPDATED_AT),
+            )
+            database.execSQL(
+                "INSERT INTO document_pages (pageId, documentId, position, mimeType, sizeBytes, wrappedKey, formatVersion) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>(DOCUMENT_A, DOCUMENT_A, 0, MIME_JPEG, photo.size.toLong(), photoKey, PAGE_FORMAT_LEGACY),
+            )
+        }
+
+        vault.unlock()
+        val (version, details) = vault.holder.withDatabase { room ->
+            val migrated = room.openHelper.writableDatabase
+            migrated.version to readRows(migrated, "SELECT COUNT(*) FROM profile_facts")
+        }
+
+        assertEquals(VERSION_LATEST, version)
+        assertEquals(listOf(listOf("0")), details)
+        assertArrayEquals("the old document still opens with its exact bytes", photo, openOnlyPage(DOCUMENT_A))
+        assertTrue("details can be saved after the migration", vault.profileRepository.allFacts().isEmpty())
+    }
+
     /**
      * Builds the test vault's database as version 1, exactly as laid out in 1.json, encrypted with
      * the test vault's own passphrase, and lets [addRows] fill it.
      */
     private fun createVersion1Database(addRows: (SupportSQLiteDatabase) -> Unit) {
-        val schemaText = instrumentation.context.assets.open(VERSION_1_SCHEMA).bufferedReader().use { reader -> reader.readText() }
+        createDatabase(VERSION_1_SCHEMA, VERSION_1, addRows)
+    }
+
+    /** Builds the test vault's database exactly as laid out in [schemaAsset], marked as [version]. */
+    private fun createDatabase(schemaAsset: String, version: Int, addRows: (SupportSQLiteDatabase) -> Unit) {
+        val schemaText = instrumentation.context.assets.open(schemaAsset).bufferedReader().use { reader -> reader.readText() }
         val schema = JSONObject(schemaText).getJSONObject("database")
         val path = context.getDatabasePath(vault.databaseName)
         path.parentFile?.mkdirs()
@@ -158,7 +191,7 @@ class VaultMigrationTest {
         val database = SQLiteDatabase.openDatabase(path.path, passphrase, null, flags, noHook)
         try {
             runSchemaStatements(database, schema)
-            database.version = VERSION_1
+            database.version = version
             addRows(database)
         } finally {
             database.close()
@@ -171,8 +204,15 @@ class VaultMigrationTest {
         val entities = schema.getJSONArray("entities")
         for (index in 0 until entities.length()) {
             val entity = entities.getJSONObject(index)
-            val createSql = entity.getString("createSql").replace(TABLE_NAME_PLACEHOLDER, entity.getString("tableName"))
+            val tableName = entity.getString("tableName")
+            val createSql = entity.getString("createSql").replace(TABLE_NAME_PLACEHOLDER, tableName)
             database.execSQL(createSql)
+            // Indexes are listed apart from the table (version 1 had none; version 2 has one).
+            val indices = entity.optJSONArray("indices") ?: continue
+            for (indexNumber in 0 until indices.length()) {
+                val indexSql = indices.getJSONObject(indexNumber).getString("createSql").replace(TABLE_NAME_PLACEHOLDER, tableName)
+                database.execSQL(indexSql)
+            }
         }
         val setupQueries = schema.getJSONArray("setupQueries")
         for (index in 0 until setupQueries.length()) {
@@ -236,9 +276,11 @@ class VaultMigrationTest {
     private companion object {
         const val SQLCIPHER_LIBRARY = "sqlcipher"
         const val VERSION_1_SCHEMA = "com.heybuddy.data.VaultDatabase/1.json"
+        const val VERSION_2_SCHEMA = "com.heybuddy.data.VaultDatabase/2.json"
         const val TABLE_NAME_PLACEHOLDER = "\${TABLE_NAME}"
         const val VERSION_1 = 1
         const val VERSION_2 = 2
+        const val VERSION_LATEST = 3
         const val DOCUMENT_A = "6f1c2a4e-1b2c-4d3e-8f90-123456789abc"
         const val DOCUMENT_B = "7a2d3b5f-2c3d-4e4f-9a01-23456789abcd"
         const val MIME_JPEG = "image/jpeg"

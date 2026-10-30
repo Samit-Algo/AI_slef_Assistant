@@ -67,6 +67,9 @@ class TestVault(private val context: Context, name: String, clock: () -> Long = 
     /** The test repository. */
     val repository = VaultRepository(holder, lockState, keyWrapper, fileCrypto, clock = clock)
 
+    /** The test vault's confirmed profile details (Task 2.8). */
+    val profileRepository = ProfileRepository(holder, clock = clock)
+
     /** Turns test files (content:// or file:// uris) into pending pages; storage is never "full". */
     val pagePreparer = PagePreparer(context.contentResolver, repository, freeSpaceBytes = { Long.MAX_VALUE })
 

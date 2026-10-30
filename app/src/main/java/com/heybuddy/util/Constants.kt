@@ -265,3 +265,11 @@ const val NAME_SEARCH_LINES_ABOVE_DOB: Int = 3
 
 /** An address is at most this many lines (an Aadhaar back has up to about 5). */
 const val ADDRESS_MAX_LINES: Int = 6
+
+// Profile details storage (Task 2.8, spec 7.10).
+
+/** Aadhaar: only this many last digits are stored unless the user explicitly keeps the full number (rule 7.3-4). */
+const val AADHAAR_LAST_DIGITS: Int = 4
+
+/** Longest stored detail (a long address fits easily); anything longer is a reading mistake. */
+const val MAX_FACT_VALUE_LENGTH: Int = 500
