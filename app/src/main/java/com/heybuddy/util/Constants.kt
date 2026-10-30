@@ -254,3 +254,14 @@ const val DL_EARLIEST_YEAR: Int = 1950
 /** Range for other dates (issue, validity): wide, but outside it a "date" is a misread number. */
 const val DATE_EARLIEST_YEAR: Int = 1900
 const val DATE_LATEST_YEAR: Int = 2100
+
+// Fact rules part 2 (Task 2.7, spec 7.7).
+
+/** Longest name: 5 words (owner rule: 1 to 5, initials counted as words). */
+const val NAME_MAX_WORDS: Int = 5
+
+/** On an Aadhaar front the name is just above the date of birth, with a Hindi and a Tamil line nearby. */
+const val NAME_SEARCH_LINES_ABOVE_DOB: Int = 3
+
+/** An address is at most this many lines (an Aadhaar back has up to about 5). */
+const val ADDRESS_MAX_LINES: Int = 6

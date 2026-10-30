@@ -2,7 +2,7 @@ package com.heybuddy.facts
 
 import com.heybuddy.util.TamilText
 
-/** What a found fact is (Task 2.6 numbers and dates; names and addresses follow in Task 2.7). */
+/** What a found fact is (Task 2.6 numbers and dates, Task 2.7 names, gender and addresses). */
 enum class FactKind {
     PAN,
     AADHAAR_NUMBER,
@@ -13,6 +13,33 @@ enum class FactKind {
 
     /** Any other date on the page, such as an issue or validity date (ISO "YYYY-MM-DD"). */
     OTHER_DATE,
+
+    /** The holder's name in English letters, initials kept exactly as printed. */
+    NAME,
+
+    /** The holder's name in Tamil script. */
+    NAME_TAMIL,
+
+    /** Father's name (English or Tamil script, as printed). Also from "S/O" or "D/O" (please check). */
+    FATHER_NAME,
+
+    /** Husband's name, from "W/O" (please check). */
+    HUSBAND_NAME,
+
+    /** "C/O" (care of) or "S/D/W of": a relative or guardian whose exact relation is not printed. */
+    RELATIVE_NAME,
+
+    /** MALE, FEMALE or TRANSGENDER. */
+    GENDER,
+
+    /** The address in English letters, lines joined, up to and including the PIN code. */
+    ADDRESS,
+
+    /** The address in Tamil script. */
+    ADDRESS_TAMIL,
+
+    /** The 6-digit PIN code of an address. */
+    PIN_CODE,
 }
 
 /** How sure the rules are. Nothing is ever saved without the user confirming it (spec 7.9). */
@@ -45,6 +72,31 @@ internal object FactText {
      * @return Cleaned text, lines kept.
      */
     fun prepare(text: String): String = IdNumbers.withAsciiDigits(TamilText.clean(text))
+
+    /**
+     * The prepared, trimmed, non-empty lines, without reading garbage: a line with letters of any
+     * script other than English, Hindi or Tamil (ML Kit writes Bengali-like look-alikes for Tamil)
+     * is never used for a name or an address (spec 7.4a).
+     *
+     * @param text Read text.
+     * @return The usable lines, in order.
+     */
+    fun usableLines(text: String): List<String> {
+        val lines = prepare(text).lines().map { line -> line.trim() }
+        return lines.filter { line -> line.isNotEmpty() && !hasForeignLetters(line) }
+    }
+
+    /** True for Tamil letters and signs. */
+    fun isTamil(character: Char): Boolean = character in '\u0B80'..'\u0BFF'
+
+    /** True for English letters. */
+    fun isLatin(character: Char): Boolean = character in 'A'..'Z' || character in 'a'..'z'
+
+    private fun hasForeignLetters(line: String): Boolean {
+        return line.any { character -> Character.isLetter(character) && !isLatin(character) && !isTamil(character) && !isDevanagari(character) }
+    }
+
+    private fun isDevanagari(character: Char): Boolean = character in '\u0900'..'\u097F'
 }
 
 /**

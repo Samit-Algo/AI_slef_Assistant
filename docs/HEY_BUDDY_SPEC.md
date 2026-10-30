@@ -705,6 +705,28 @@ Barcode Scanning (bundled; 4.7 MB engine on 64-bit phones, same usage-logging pa
 confirmed fact (Aadhaar always masked), with its source ("Aadhaar card, page 1" or "page deleted"),
 and lets the user edit or delete each one.
 
+**"My details" profile page, in detail (owner's profile-page request, confirmed in Task 2.7):**
+1. **Sections, in this order:** **Personal** (name, name in Tamil, date of birth, gender), **Family**
+   (father's name, father's name in Tamil, husband's name, other relative from "C/O" / "S/D/W of"),
+   **Identity numbers** (Aadhaar, PAN, driving licence number), **Address** (address, address in
+   Tamil, PIN code), **Other** (anything else). Empty sections still show their typed-field
+   offers (7.9) where they have one, otherwise they are hidden.
+2. **"From: <document>"** under each detail, for example "From: Aadhaar card, page 1"; "From: typed
+   by you" for typed values; "From: page deleted" when the source was deleted but the detail kept.
+3. **Mismatch warning:** when two documents give DIFFERENT values for the same detail (for example
+   two dates of birth), the detail shows a calm warning ("Your documents disagree") and lists each
+   value with its source; the user **picks the correct one** (stored as the chosen value, 7.10). The
+   others stay, marked "not chosen", until the user deletes them. Comparison ignores spacing, case
+   and the Tamil cleanup differences (TamilText.clean).
+4. **Completeness line** at the top, for example "6 of 9 details filled", counting the main details
+   (name, date of birth, gender, father's name, Aadhaar, PAN, address, PIN code, name in Tamil).
+5. **Masked numbers:** Aadhaar is always shown masked ("XXXX XXXX 1231"); the full number, when the
+   user chose to store it (7.3-4), is **revealed only after "Confirm it's you"** (fingerprint/PIN) and
+   hides again when the screen is left or the vault locks. PAN and licence numbers follow the same
+   reveal rule.
+6. **No copy to clipboard for ID numbers** (Aadhaar, PAN, licence): no copy button, and the text is not
+   selectable, because other apps can read the clipboard. Names and addresses may be copied.
+
 **Typed Tamil fields (owner decision, 2026-10-28):** "My details" always offers **Name in Tamil**,
 **Father's name in Tamil** and **Address in Tamil**, which the user can type (or correct) by hand,
 so Tamil works even when a photo is hard to read. Typed values are stored with origin `TYPED` and
@@ -717,12 +739,13 @@ New table `profile_facts`:
 | Column | Type | Notes |
 | --- | --- | --- |
 | `factId` | String (UUID) | Primary key |
-| `kind` | String (`FactKind`) | `FULL_NAME`, `FATHER_NAME`, `DATE_OF_BIRTH`, `YEAR_OF_BIRTH`, `GENDER`, `PAN`, `AADHAAR_LAST4`, `AADHAAR_FULL`, `ADDRESS`, `PIN_CODE`, and the Tamil fields `FULL_NAME_TAMIL`, `FATHER_NAME_TAMIL`, `ADDRESS_TAMIL` |
+| `kind` | String (`FactKind`) | `FULL_NAME`, `FATHER_NAME`, `HUSBAND_NAME`, `RELATIVE_NAME`, `DATE_OF_BIRTH`, `YEAR_OF_BIRTH`, `GENDER`, `PAN`, `AADHAAR_LAST4`, `AADHAAR_FULL`, `DRIVING_LICENCE_NUMBER`, `ADDRESS`, `PIN_CODE`, and the Tamil fields `FULL_NAME_TAMIL`, `FATHER_NAME_TAMIL`, `ADDRESS_TAMIL` (husband/relative and licence number added in Task 2.7 from the fact rules) |
 | `value` | String | As confirmed by the user (dates stored as `YYYY-MM-DD`) |
 | `documentId` | String, nullable | The source document (null for facts the user typed in "My details") (foreign key, set to null if the user keeps the fact when the document is deleted) |
 | `pageId` | String, nullable | The page it came from (foreign key to `document_pages`, set to null if the user keeps the fact when the page is deleted) |
 | `sourceDeletedAt` | Long, nullable | Set when the source page/document was deleted but the user kept the fact; shown as "page deleted" |
 | `origin` | String | `OCR`, `QR_VERIFIED` (Task 2.12) or `TYPED` (the user corrected it) |
+| `chosen` | Boolean | True for the value the user picked when documents disagree ("My details" mismatch warning); true by default when there is only one value of that kind |
 | `confirmedAt` / `updatedAt` | Long (epoch ms) | |
 
 - Index on `documentId` and on `pageId`.
@@ -765,7 +788,7 @@ permission.
 | **2.7 Facts part 2: name, gender, address (English, Hindi and Tamil labels)** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts, Tamil labels (7.7), Tamil-script names and addresses + computer tests on made-up samples | All rule tests pass |
 | **2.8 Profile facts storage** | Table, `FactKind`, migration 2 → 3 with test, repository (save confirmed facts, list, edit, delete), Aadhaar storage rule (7.3-4), the delete-source rule (7.10: "Also delete the N details…?" in the page and document delete dialogs, Yes by default; No keeps them as "page deleted") | Migration test passes; old vault still opens; both delete choices tested |
 | **2.9 Confirm screen** | 7.9, with masked Aadhaar and the "full number" tick box; Save stores only kept facts; lock/cancel discard everything | Nothing unconfirmed stored (test); manual test |
-| **2.10 Entry points and "My details" tab** | "Read details" after saving a document and in the viewer menu; the vault screen gets two tabs, **"Documents | My details"** (design system and motion of 5.14); "My details" lists facts with their source (or "page deleted"), masked Aadhaar, edit, delete; the typed Tamil fields (Name, Father's name, Address in Tamil) | Owner reads a sample Aadhaar, PAN and a Tamil sample end to end; typed Tamil fields saved |
+| **2.10 Entry points and "My details" tab** | "Read details" after saving a document and in the viewer menu; the vault screen gets two tabs, **"Documents | My details"** (design system and motion of 5.14); "My details" as the profile page of 7.9: sections Personal, Family, Identity numbers, Address, Other; "From: <document>" under each detail; mismatch warning with picking the correct value; completeness line; masked numbers revealed only after "Confirm it's you"; no copy to clipboard for ID numbers; edit, delete; the typed Tamil fields (Name, Father's name, Address in Tamil) | Owner reads a sample Aadhaar, PAN and a Tamil sample end to end; typed Tamil fields saved |
 | **2.11 Tamil Nadu certificate types** | Add community, income, nativity and school/transfer certificate to the document types (labels, colours and icons from the design system), with a database version step, a real migration and a migration test; detection rules (7.6) for them | Types selectable and detected on samples; migration test passes; old vault opens |
 | **2.12 Aadhaar Secure QR (later)** | 7.8: scan, decode, verify the UIDAI signature offline, mark facts verified | Signed QR verified; tampered QR rejected |
 | **2.13 Phase 2 review** | All tests, a short Phase 2 report, size and privacy summary | Owner approves |
