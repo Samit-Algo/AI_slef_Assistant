@@ -225,3 +225,17 @@ const val CAMERA_HINT_WINDOW_FRAMES: Int = 8
 /** Shape of the guide frame: an ID card (85.6 x 54 mm) and an A4 page (210 x 297 mm), long side / short side. */
 const val CARD_ASPECT_RATIO: Float = 85.6f / 54f
 const val A4_ASPECT_RATIO: Float = 297f / 210f
+
+// Document type guess (Task 2.5, spec 7.6).
+
+/** Points for a word that by itself names the type ("Aadhaar", "Permanent Account Number") or a valid number. */
+const val TYPE_GUESS_DECISIVE_POINTS: Int = 3
+
+/** Points for a word that only supports a type ("Government of India", "DL No"). */
+const val TYPE_GUESS_SUPPORTING_POINTS: Int = 1
+
+/** Fewest points for a suggestion: one decisive sign, or three supporting words together. */
+const val TYPE_GUESS_MIN_SCORE: Int = 3
+
+/** How far the best type must be ahead of the next one, so a mixed page gets no suggestion. */
+const val TYPE_GUESS_MIN_LEAD: Int = 2
