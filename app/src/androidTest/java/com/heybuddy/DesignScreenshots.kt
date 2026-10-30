@@ -14,6 +14,13 @@ import androidx.core.view.WindowCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.heybuddy.ui.camera.CameraAccess
+import com.heybuddy.ui.camera.CameraActions
+import com.heybuddy.ui.camera.CameraScreen
+import com.heybuddy.ui.camera.CameraStage
+import com.heybuddy.ui.camera.CameraUiState
+import com.heybuddy.ui.camera.CaptureHint
+import com.heybuddy.ui.camera.FrameShape
 import com.heybuddy.data.DisplayNameProblem
 import com.heybuddy.data.DocumentType
 import com.heybuddy.ui.adddocument.AddDocumentActions
@@ -102,6 +109,43 @@ class DesignScreenshots {
         )
         captureAll(outputDir, screens)
     }
+
+    /** Task 2.4: the in-app camera screens (no real camera: the preview area stays black here). */
+    @Test
+    fun captureCameraScreens() {
+        val folder = File(instrumentation.targetContext.cacheDir, "design_screenshots_2_4")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        val samplePhoto = drawSampleCard(Color.rgb(240, 236, 228), "SAMPLE DOCUMENT")
+        val live = CameraUiState(stage = CameraStage.LIVE, hasTorch = true)
+        val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "01_add_choose_with_camera" to {
+                AddDocumentScreen(uiState = AddDocumentUiState(), actions = AddDocumentActions({}, {}, {}, {}, {}, {}, {}, {}, onTakePhoto = {}))
+            },
+            "02_camera_explanation" to { CameraScreen(CameraUiState(stage = CameraStage.NEEDS_ACCESS, access = CameraAccess.ASK_WITH_EXPLANATION), null, noCameraActions()) },
+            "03_camera_denied" to { CameraScreen(CameraUiState(stage = CameraStage.NEEDS_ACCESS, access = CameraAccess.DENIED), null, noCameraActions()) },
+            "04_camera_denied_for_good" to { CameraScreen(CameraUiState(stage = CameraStage.NEEDS_ACCESS, access = CameraAccess.DENIED_FOR_GOOD), null, noCameraActions()) },
+            "05_camera_live_card" to { CameraScreen(live, null, noCameraActions()) },
+            "06_camera_live_page_more_light" to {
+                CameraScreen(live.copy(frameShape = FrameShape.PAGE, liveHint = CaptureHint.MORE_LIGHT, torchOn = true), null, noCameraActions())
+            },
+            "07_camera_hold_steady" to { CameraScreen(live.copy(liveHint = CaptureHint.HOLD_STEADY), null, noCameraActions()) },
+            "08_camera_taking" to { CameraScreen(live.copy(stage = CameraStage.TAKING), null, noCameraActions()) },
+            "09_camera_review_good" to { CameraScreen(CameraUiState(stage = CameraStage.REVIEW, review = samplePhoto), null, noCameraActions()) },
+            "10_camera_review_blurry" to {
+                CameraScreen(CameraUiState(stage = CameraStage.REVIEW, review = samplePhoto, reviewHint = CaptureHint.TOO_BLURRY), null, noCameraActions())
+            },
+            "11_viewer_add_page_choice" to {
+                ViewerScreen(
+                    ViewerUiState(stage = ViewerStage.READY, title = "Sample photo", documentPageCount = 1, picture = drawSamplePreview(), addPageChoiceOpen = true),
+                    ViewerActions({}, {}, {}, {}, {}, {}, {}, {}, onTakePhotoClick = {}),
+                )
+            },
+        )
+        captureAll(folder, screens)
+    }
+
+    private fun noCameraActions(): CameraActions = CameraActions({}, {}, {}, {}, {}, {}, {}, {}, {})
 
     /** Task 1.8b: the vault list and the viewer, with fake sample documents only. */
     @Test

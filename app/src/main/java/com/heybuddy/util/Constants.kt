@@ -184,3 +184,44 @@ const val MERGE_TAMIL_SURE_FROM: Float = 0.8f
 
 /** Share of a Tesseract line's letters that must be Tamil for it to count as a Tamil line. */
 const val MERGE_MIN_TAMIL_SHARE: Float = 0.8f
+
+// In-app camera (Task 2.4).
+
+/**
+ * Long side, in pixels, of a page photographed with the in-app camera. Sharp enough to zoom in and
+ * to read (OCR uses 2048), and a page stays far below the 20 MB file limit.
+ */
+const val CAMERA_PAGE_LONG_SIDE_PIXELS: Int = 3072
+
+/** The size CameraX is asked to capture (4:3, the sensor's usual shape), close to the page size above. */
+const val CAMERA_CAPTURE_WIDTH_PIXELS: Int = 3072
+const val CAMERA_CAPTURE_HEIGHT_PIXELS: Int = 2304
+
+/** JPEG quality of a camera page (owner decision, Task 2.4): good detail, about 1 MB a page. */
+const val CAMERA_JPEG_QUALITY: Int = 90
+
+/** Long side of the picture shown on the "Retake or keep" screen; the page itself stays full size. */
+const val CAMERA_REVIEW_LONG_SIDE_PIXELS: Int = 1600
+
+/** Size of the preview frames measured for the hints: small enough to measure quickly. */
+const val CAMERA_ANALYSIS_WIDTH_PIXELS: Int = 640
+const val CAMERA_ANALYSIS_HEIGHT_PIXELS: Int = 480
+
+/**
+ * Below this average brightness (0 = black, 255 = white) a frame is "too dark": the hint says
+ * "More light needed". PROVISIONAL until measured with the owner's real photos (Task 2.4 step 5).
+ */
+const val CAMERA_DARK_BELOW: Double = 60.0
+
+/**
+ * Below this sharpness (variance of the Laplacian on a 640 px wide picture) a picture is "blurry".
+ * PROVISIONAL until measured with the owner's real photos (Task 2.4 step 5).
+ */
+const val CAMERA_BLURRY_BELOW: Double = 60.0
+
+/** How many recent preview frames the live hint looks at, so it does not flicker. */
+const val CAMERA_HINT_WINDOW_FRAMES: Int = 8
+
+/** Shape of the guide frame: an ID card (85.6 x 54 mm) and an A4 page (210 x 297 mm), long side / short side. */
+const val CARD_ASPECT_RATIO: Float = 85.6f / 54f
+const val A4_ASPECT_RATIO: Float = 297f / 210f

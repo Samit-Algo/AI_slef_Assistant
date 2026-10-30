@@ -121,15 +121,32 @@ class AddDocumentViewModel(
      */
     fun onFilesPicked(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        // A picker can return after the vault locked (for example the screen turned off while it
-        // was open). The files must then not be read at all.
-        if (lockState.status.value == LockStatus.LOCKED) return
+        startPreparing(uris.map { uri -> PageSource.PickedFile(uri) })
+    }
+
+    /**
+     * Called with a photo the user kept in the in-app camera (Task 2.4).
+     *
+     * @param jpeg The photo. This view model becomes its owner and wipes it in every case.
+     */
+    fun onPhotoTaken(jpeg: ByteArray) {
+        startPreparing(listOf(PageSource.CameraPhoto(jpeg)))
+    }
+
+    private fun startPreparing(sources: List<PageSource>) {
         val current = mutableUiState.value
-        if (current.stage != AddStage.CHOOSING && current.stage != AddStage.READY) return
+        // A picker or the camera can return after the vault locked (for example the screen turned
+        // off). The pages must then not be read at all.
+        val canTake = lockState.status.value != LockStatus.LOCKED &&
+            (current.stage == AddStage.CHOOSING || current.stage == AddStage.READY)
+        if (!canTake) {
+            sources.forEach { source -> source.dropUnused() }
+            return
+        }
         val documentId = draftDocumentId ?: preparer.newDocumentId()
         draftDocumentId = documentId
         mutableUiState.value = current.copy(stage = AddStage.READING, errorMessage = null)
-        viewModelScope.launch { prepareAll(documentId, uris) }
+        viewModelScope.launch { prepareAll(documentId, sources) }
     }
 
     /**
@@ -223,15 +240,17 @@ class AddDocumentViewModel(
     /** Test hook: the ids of the pending pages this screen holds. */
     internal fun pendingPageIdsForTest(): Set<String> = preparedPages.keys.toSet()
 
-    private suspend fun prepareAll(documentId: String, uris: List<Uri>) {
+    private suspend fun prepareAll(documentId: String, sources: List<PageSource>) {
         var lastFailure: AddDocumentFailure? = null
-        for (uri in uris) {
-            if (!isStillReading(documentId)) return
-            if (mutableUiState.value.pages.size >= MAX_PAGES_PER_DOCUMENT) {
+        for ((index, source) in sources.withIndex()) {
+            if (!isStillReading(documentId) || mutableUiState.value.pages.size >= MAX_PAGES_PER_DOCUMENT) {
+                // Whatever is left is not prepared; a camera photo among it is wiped now.
+                sources.drop(index).forEach { unused -> unused.dropUnused() }
+                if (!isStillReading(documentId)) return
                 lastFailure = AddDocumentFailure.TOO_MANY_PAGES
                 break
             }
-            val result = preparer.prepare(documentId, uri)
+            val result = preparer.prepare(documentId, source)
             if (!isStillReading(documentId)) {
                 // Locked or cancelled while preparing: nothing may be kept.
                 discardResult(result)

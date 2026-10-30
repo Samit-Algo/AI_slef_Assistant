@@ -11,6 +11,14 @@
         android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
 
+    <!-- Task 2.4: the in-app camera photographs documents straight into the vault. Asked only when
+         the user taps "Take photo". Not required: phones without a camera can still install the
+         app, and "Take photo" is then hidden. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
     <!-- enableOnBackInvokedCallback: the back-gesture preview on Android 14+ (spec 5.14, item 4).
          Rule 7: no backups. allowBackup covers Android 11 and below; the two rule files
          exclude everything from cloud backup and device-to-device transfer on newer versions. -->

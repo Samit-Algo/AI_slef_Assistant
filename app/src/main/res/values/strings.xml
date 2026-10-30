@@ -82,6 +82,7 @@
     <string name="viewer_error_remove_page">This page couldn\'t be removed. Please try again.</string>
     <string name="add_page_dialog_title">Add a page</string>
     <string name="add_page_dialog_body">Where is the new page?</string>
+    <string name="add_page_dialog_camera">Take photo</string>
     <string name="add_page_dialog_photos">Photos</string>
     <string name="add_page_dialog_files">PDF or file</string>
     <string name="remove_page_title">Remove this page?</string>
@@ -193,6 +194,8 @@
     <string name="add_move_page_up">Move page %1$d up</string>
     <string name="add_move_page_down" tools:ignore="PluralsCandidate">Move page %1$d down</string>
     <string name="add_remove_page">Remove page %1$d</string>
+    <string name="add_take_photo">Take photo</string>
+    <string name="add_take_another_photo">Take another photo</string>
     <string name="add_more_photos">Add more photos</string>
     <string name="add_more_files">Add a PDF or file</string>
     <string name="add_page_limit_reached">This document has the most pages allowed (%1$d).</string>
@@ -217,4 +220,34 @@
     <string name="add_error_too_many_pages">A document can have at most 10 pages. Remove a page first, or save this one and add the rest as a new document.</string>
     <string name="add_error_document_too_large">All pages together can be at most 50 MB. Remove a page or choose smaller files.</string>
     <string name="add_error_other">Something went wrong. Your document was not saved. Please try again.</string>
+
+    <!-- In-app camera (Task 2.4) -->
+    <string name="camera_close">Close camera</string>
+    <string name="camera_torch_on">Turn torch on</string>
+    <string name="camera_torch_off">Turn torch off</string>
+    <string name="camera_shutter">Take the photo</string>
+    <string name="camera_frame_card">Card</string>
+    <string name="camera_frame_page">Page</string>
+    <string name="camera_aim">Fit the document inside the frame</string>
+    <string name="camera_hint_more_light">More light needed</string>
+    <string name="camera_hint_hold_steady">Hold steady</string>
+    <string name="camera_hint_too_blurry">Too blurry, try again</string>
+    <string name="camera_taking">Getting the photo ready…</string>
+    <string name="camera_review_description">The photo you just took</string>
+    <string name="camera_review_looks_good">Check that all the text is clear.</string>
+    <string name="camera_retake">Retake</string>
+    <string name="camera_use_photo">Use this photo</string>
+    <string name="camera_access_title">Take a photo of your document</string>
+    <string name="camera_access_body">Hey Buddy uses the camera only to photograph your document. The photo goes straight into your locked vault, never to your gallery.</string>
+    <string name="camera_access_continue">Continue</string>
+    <string name="camera_access_not_now">Not now</string>
+    <string name="camera_denied_title">No problem</string>
+    <string name="camera_denied_body">You can choose a photo you already have instead, or let Hey Buddy ask again.</string>
+    <string name="camera_ask_again">Ask again</string>
+    <string name="camera_denied_for_good_title">The camera is off for Hey Buddy</string>
+    <string name="camera_denied_for_good_body">To use it, open Settings, tap Permissions, then Camera, and choose \"Allow only while using the app\". Or choose a photo you already have.</string>
+    <string name="camera_open_settings">Open settings</string>
+    <string name="camera_choose_instead">Choose a photo instead</string>
+    <string name="camera_error_open">The camera could not start. Close other apps that use the camera, then try again.</string>
+    <string name="camera_error_take">The photo could not be taken. Please try again.</string>
 </resources>

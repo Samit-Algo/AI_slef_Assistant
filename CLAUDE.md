@@ -28,6 +28,9 @@
 - Allowed without asking: `adb devices`, install, launch, read logcat, run tests.
 - Ask first: uninstalling the app, clearing app data, or any other adb command that changes the phone.
 - Run instrumented tests with `adb shell am instrument`, not Gradle's `connectedAndroidTest`, because that one uninstalls the app afterwards.
+- After each task: run only the NEW or CHANGED tests for that task, plus the owner's manual check. No full run.
+- One full test run only at the end of each phase, or when shared security code (keys, encryption, database, lock) changes. Tell the owner before starting a full run and why.
+- Do not repeat automatically what the owner has already tested by hand, and do not ask the owner to re-test things that already passed.
 - Standing permission (owner, Task 1.10p): before any FULL phone test run you may run `adb shell svc power stayon usb`. You must ALWAYS run `adb shell svc power stayon false` right after the run, even if it fails or is stopped, and always say in the report that it is off.
 
 ## Always true

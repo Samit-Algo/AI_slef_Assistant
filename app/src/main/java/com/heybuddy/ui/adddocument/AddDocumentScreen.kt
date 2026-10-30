@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,6 +81,9 @@ private val ThumbnailHeight = 72.dp
  * @property onClose Called on back, Cancel and Done.
  * @property onBeforeExternalScreen Called right before a picker opens, so auto-lock knows the app
  *   is not really being left (one-time 2-minute pass, rule 9).
+ * @property onTakePhoto Opens the in-app camera, or null on phones without a camera (button hidden).
+ * @property onPickPhotosNowHandled Called once the photo picker asked for by "Choose a photo
+ *   instead" (in the camera) has been opened.
  */
 class AddDocumentActions(
     val onFilesPicked: (List<Uri>) -> Unit,
@@ -91,20 +95,32 @@ class AddDocumentActions(
     val onSaveClick: () -> Unit,
     val onClose: () -> Unit,
     val onBeforeExternalScreen: () -> Unit = {},
+    val onTakePhoto: (() -> Unit)? = null,
+    val onPickPhotosNowHandled: () -> Unit = {},
 )
 
-/** Opens the two pickers. Both grant one-time access only; nothing here asks to keep it. */
-private class Pickers(val pickPhotos: () -> Unit, val pickFiles: () -> Unit)
+/**
+ * Opens the two pickers and the camera. The pickers grant one-time access only; nothing here asks
+ * to keep it. [takePhoto] is null on phones without a camera.
+ */
+private class Pickers(val pickPhotos: () -> Unit, val pickFiles: () -> Unit, val takePhoto: (() -> Unit)?)
 
 /**
  * The Add document screen: pick pages, put them in order, choose type and name, save.
  *
  * @param uiState What to show.
  * @param actions What happens on each tap.
+ * @param pickPhotosNow True to open the photo picker straight away ("Choose a photo instead" in the camera).
  */
 @Composable
-fun AddDocumentScreen(uiState: AddDocumentUiState, actions: AddDocumentActions) {
+fun AddDocumentScreen(uiState: AddDocumentUiState, actions: AddDocumentActions, pickPhotosNow: Boolean = false) {
     val pickers = rememberPickers(actions)
+    LaunchedEffect(pickPhotosNow) {
+        if (pickPhotosNow) {
+            actions.onPickPhotosNowHandled()
+            pickers.pickPhotos()
+        }
+    }
     ScreenScaffold(topBar = { AddDocumentTopBar(onBack = actions.onClose) }) {
         when (uiState.stage) {
             AddStage.CHOOSING -> ChooseFileSection(pickers)
@@ -136,6 +152,7 @@ private fun rememberPickers(actions: AddDocumentActions): Pickers {
             actions.onBeforeExternalScreen()
             filePicker.launch(ACCEPTED_MIME_TYPES)
         },
+        takePhoto = actions.onTakePhoto,
     )
 }
 
@@ -161,7 +178,14 @@ private fun ChooseFileSection(pickers: Pickers) {
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    PrimaryButton(text = stringResource(R.string.add_choose_photo), onClick = pickers.pickPhotos, icon = R.drawable.ic_image)
+    val takePhoto = pickers.takePhoto
+    if (takePhoto != null) {
+        // The camera is the quickest way for a paper document, so it comes first (Task 2.4).
+        PrimaryButton(text = stringResource(R.string.add_take_photo), onClick = takePhoto, icon = R.drawable.ic_photo_camera)
+        SecondaryButton(text = stringResource(R.string.add_choose_photo), onClick = pickers.pickPhotos, icon = R.drawable.ic_image)
+    } else {
+        PrimaryButton(text = stringResource(R.string.add_choose_photo), onClick = pickers.pickPhotos, icon = R.drawable.ic_image)
+    }
     SecondaryButton(text = stringResource(R.string.add_choose_file), onClick = pickers.pickFiles, icon = R.drawable.ic_picture_as_pdf)
 }
 
@@ -279,6 +303,10 @@ private fun AddMorePages(canAddPage: Boolean, pickers: Pickers) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         return
+    }
+    val takePhoto = pickers.takePhoto
+    if (takePhoto != null) {
+        SecondaryButton(text = stringResource(R.string.add_take_another_photo), onClick = takePhoto, icon = R.drawable.ic_photo_camera)
     }
     SecondaryButton(text = stringResource(R.string.add_more_photos), onClick = pickers.pickPhotos, icon = R.drawable.ic_add)
     SecondaryButton(text = stringResource(R.string.add_more_files), onClick = pickers.pickFiles, icon = R.drawable.ic_picture_as_pdf)

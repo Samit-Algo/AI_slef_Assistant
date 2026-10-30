@@ -125,6 +125,10 @@ dependencies {
     // Owner OK (Task 2.3): Tamil reading. Built by us from the official source, not downloaded;
     // see docs/TESSERACT_BUILD.md and the checksum check below.
     implementation(files(TESSERACT_AAR))
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.compose)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

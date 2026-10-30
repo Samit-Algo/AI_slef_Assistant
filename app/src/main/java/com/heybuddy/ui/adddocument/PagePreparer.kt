@@ -80,6 +80,38 @@ class PagePreparer(
      */
     suspend fun prepare(documentId: String, uri: Uri): PrepareResult {
         val loaded = withContext(Dispatchers.IO) { readAndCheck(uri) }
+        return prepareLoaded(documentId, loaded)
+    }
+
+    /**
+     * Prepares one page from either source. Never throws. A camera photo's bytes are always wiped
+     * before this returns.
+     *
+     * @param documentId The document the page will belong to.
+     * @param source A picked file or a camera photo.
+     * @return The pending page, or why it could not be made.
+     */
+    suspend fun prepare(documentId: String, source: PageSource): PrepareResult {
+        return when (source) {
+            is PageSource.PickedFile -> prepare(documentId, source.uri)
+            is PageSource.CameraPhoto -> prepareCaptured(documentId, source.jpeg)
+        }
+    }
+
+    /**
+     * Prepares a photo from the in-app camera (Task 2.4): the same checks, thumbnail, storage check
+     * and encryption as a picked file, straight from memory. The bytes are wiped before this returns.
+     *
+     * @param documentId The document the page will belong to.
+     * @param jpeg The photo. This function becomes its owner.
+     * @return The pending page, or why it could not be made.
+     */
+    suspend fun prepareCaptured(documentId: String, jpeg: ByteArray): PrepareResult {
+        val loaded = withContext(Dispatchers.Default) { checkCaptured(jpeg) }
+        return prepareLoaded(documentId, loaded)
+    }
+
+    private suspend fun prepareLoaded(documentId: String, loaded: LoadResult): PrepareResult {
         if (loaded is LoadResult.Failed) return PrepareResult.Failed(loaded.failure)
         val checked = loaded as LoadResult.Checked
         try {
@@ -109,6 +141,25 @@ class PagePreparer(
             if (isStorageFull(failed)) AddDocumentFailure.STORAGE_FULL else AddDocumentFailure.OTHER
         }
         return PrepareResult.Failed(failure)
+    }
+
+    /** Type-checks and thumbnails a camera photo. Wipes the bytes itself on any failure. */
+    private fun checkCaptured(jpeg: ByteArray): LoadResult {
+        if (jpeg.size > MAX_FILE_BYTES) {
+            jpeg.fill(0)
+            return LoadResult.Failed(AddDocumentFailure.TOO_LARGE)
+        }
+        val type = FileTypeDetector.detect(jpeg)
+        if (type == null || !type.isImage) {
+            jpeg.fill(0)
+            return LoadResult.Failed(AddDocumentFailure.DAMAGED_IMAGE)
+        }
+        return try {
+            LoadResult.Checked(jpeg, type, FilePreview.decodeImage(jpeg))
+        } catch (damaged: DamagedImageException) {
+            jpeg.fill(0)
+            LoadResult.Failed(AddDocumentFailure.DAMAGED_IMAGE)
+        }
     }
 
     /** Reads, type-checks and thumbnails the file. Wipes the bytes itself on any failure. */

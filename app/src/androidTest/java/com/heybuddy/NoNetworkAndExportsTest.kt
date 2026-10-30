@@ -3,6 +3,7 @@ package com.heybuddy
 import android.content.pm.ComponentInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.content.pm.PermissionInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -12,8 +13,8 @@ import org.junit.runner.RunWith
 
 /**
  * Checks the INSTALLED app, as the phone sees it (rules 1 and 15; spec 7.3): it holds no network
- * permission at all, even with ML Kit inside, and only the launcher activity can be opened by other
- * apps. Reads the real package, so a library adding something back can never slip through.
+ * permission at all, even with ML Kit inside, the camera is its only permission that needs the
+ * user's yes, and only the launcher activity can be opened by other apps. Reads the real package, so a library adding something back can never slip through.
  */
 @RunWith(AndroidJUnit4::class)
 class NoNetworkAndExportsTest {
@@ -29,6 +30,18 @@ class NoNetworkAndExportsTest {
         }
     }
 
+    /**
+     * Task 2.4: the camera is the ONLY permission that needs the user's yes (a "dangerous" one).
+     * Anything else of that kind (location, contacts, files, microphone…) is a failure.
+     */
+    @Test
+    fun cameraIsTheOnlyPermissionThatNeedsTheUsersYes() {
+        val requested = installedPackage().requestedPermissions?.toList() ?: emptyList()
+        val askingTheUser = requested.filter { permission -> isDangerous(permission) }
+
+        assertEquals(listOf("android.permission.CAMERA"), askingTheUser)
+    }
+
     @Test
     fun onlyTheLauncherActivityIsExported() {
         val info = installedPackage()
@@ -41,6 +54,15 @@ class NoNetworkAndExportsTest {
         val exported = components.filter { component -> component.exported }.map { component -> component.name }
 
         assertEquals(listOf(MainActivity::class.java.name), exported)
+    }
+
+    private fun isDangerous(permission: String): Boolean {
+        val info = try {
+            context.packageManager.getPermissionInfo(permission, 0)
+        } catch (unknown: PackageManager.NameNotFoundException) {
+            return false
+        }
+        return info.protection == PermissionInfo.PROTECTION_DANGEROUS
     }
 
     @Suppress("DEPRECATION") // The flag-object overload needs API 33; this app supports API 30+.

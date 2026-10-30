@@ -95,6 +95,7 @@ private val ACCEPTED_MIME_TYPES: Array<String> = DetectedFileType.entries.map { 
  * @property onRemovePageDismiss Cancel (or Back) in "Remove this page?".
  * @property onBeforeExternalScreen Called right before a picker opens (one-time auto-lock pass, rule 9).
  * @property onSuccessNoticeShown The success message has been on screen long enough.
+ * @property onTakePhotoClick "Take photo" in "Add a page", or null on phones without a camera (hidden).
  */
 class ViewerActions(
     val onBack: () -> Unit,
@@ -117,6 +118,7 @@ class ViewerActions(
     val onRemovePageDismiss: () -> Unit = {},
     val onBeforeExternalScreen: () -> Unit = {},
     val onSuccessNoticeShown: () -> Unit = {},
+    val onTakePhotoClick: (() -> Unit)? = null,
 )
 
 /**
@@ -402,7 +404,10 @@ private fun ViewerDialogs(uiState: ViewerUiState, actions: ViewerActions) {
     AddPageChoice(open = uiState.addPageChoiceOpen, actions = actions)
 }
 
-/** "Add a page": photos or a file. The picker opens straight from here; both grant one-time access only. */
+/**
+ * "Add a page": the camera, photos or a file. The pickers open straight from here; both grant
+ * one-time access only.
+ */
 @Composable
 private fun AddPageChoice(open: Boolean, actions: ViewerActions) {
     val photoPicker = rememberLauncherForActivityResult(
@@ -411,31 +416,50 @@ private fun AddPageChoice(open: Boolean, actions: ViewerActions) {
     )
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), actions.onPagesPicked)
     if (!open) return
+    val pickPhotos = {
+        actions.onAddPageDismiss()
+        actions.onBeforeExternalScreen()
+        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    val pickFiles = {
+        actions.onAddPageDismiss()
+        actions.onBeforeExternalScreen()
+        filePicker.launch(ACCEPTED_MIME_TYPES)
+    }
     AlertDialog(
         onDismissRequest = actions.onAddPageDismiss,
         modifier = Modifier.popIn(),
         title = { Text(text = stringResource(R.string.add_page_dialog_title)) },
-        text = { Text(text = stringResource(R.string.add_page_dialog_body)) },
-        confirmButton = {
-            TextButton(onClick = {
-                actions.onAddPageDismiss()
-                actions.onBeforeExternalScreen()
-                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            }) {
-                Text(text = stringResource(R.string.add_page_dialog_photos))
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS)) {
+                Text(text = stringResource(R.string.add_page_dialog_body))
+                AddPageChoiceButtons(actions.onTakePhotoClick, pickPhotos, pickFiles, actions.onAddPageDismiss)
             }
         },
-        dismissButton = {
-            TextButton(onClick = {
-                actions.onAddPageDismiss()
-                actions.onBeforeExternalScreen()
-                filePicker.launch(ACCEPTED_MIME_TYPES)
-            }) {
-                Text(text = stringResource(R.string.add_page_dialog_files))
+        confirmButton = {
+            TextButton(onClick = actions.onAddPageDismiss) {
+                Text(text = stringResource(R.string.add_cancel))
             }
         },
         shape = MaterialTheme.shapes.extraLarge,
     )
+}
+
+/** One full-width choice per source; "Take photo" only on phones with a camera. */
+@Composable
+private fun AddPageChoiceButtons(takePhoto: (() -> Unit)?, pickPhotos: () -> Unit, pickFiles: () -> Unit, close: () -> Unit) {
+    if (takePhoto != null) {
+        SecondaryButton(
+            text = stringResource(R.string.add_page_dialog_camera),
+            onClick = {
+                close()
+                takePhoto()
+            },
+            icon = R.drawable.ic_photo_camera,
+        )
+    }
+    SecondaryButton(text = stringResource(R.string.add_page_dialog_photos), onClick = pickPhotos, icon = R.drawable.ic_image)
+    SecondaryButton(text = stringResource(R.string.add_page_dialog_files), onClick = pickFiles, icon = R.drawable.ic_picture_as_pdf)
 }
 
 /**

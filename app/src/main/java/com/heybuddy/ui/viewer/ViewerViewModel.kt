@@ -32,6 +32,7 @@ import com.heybuddy.ui.VaultNavigator
 import com.heybuddy.ui.adddocument.AddDocumentFailure
 import com.heybuddy.ui.adddocument.AddDocumentSaver
 import com.heybuddy.ui.adddocument.PagePreparer
+import com.heybuddy.ui.adddocument.PageSource
 import com.heybuddy.ui.adddocument.PrepareResult
 import com.heybuddy.util.MAX_PAGES_PER_DOCUMENT
 import kotlinx.coroutines.Dispatchers
@@ -342,16 +343,40 @@ class ViewerViewModel(
 
     /** Test hook: [onPagesPicked] with any prompt. */
     internal fun onPagesPickedWith(prompt: ReAuthPrompt, uris: List<Uri>) {
-        val documentId = currentDocumentId ?: return
+        if (uris.isEmpty()) return
+        addSources(prompt, uris.map { uri -> PageSource.PickedFile(uri) })
+    }
+
+    /**
+     * Called with a photo the user kept in the in-app camera (Task 2.4).
+     *
+     * @param activity Shows "Confirm it's you" if the unlock window has expired.
+     * @param jpeg The photo. This view model becomes its owner and wipes it in every case.
+     */
+    fun onPhotoTaken(activity: FragmentActivity, jpeg: ByteArray) {
+        onPhotoTakenWith(promptFor(activity), jpeg)
+    }
+
+    /** Test hook: [onPhotoTaken] with any prompt. */
+    internal fun onPhotoTakenWith(prompt: ReAuthPrompt, jpeg: ByteArray) {
+        addSources(prompt, listOf(PageSource.CameraPhoto(jpeg)))
+    }
+
+    private fun addSources(prompt: ReAuthPrompt, sources: List<PageSource>) {
+        val documentId = currentDocumentId
         val current = mutableUiState.value
-        // A picker can return after the vault locked; the files must then not be read at all.
-        if (uris.isEmpty() || released || current.busy || lockState.status.value == LockStatus.LOCKED) return
-        if (current.documentPageCount + uris.size > MAX_PAGES_PER_DOCUMENT) {
+        // A picker or the camera can return after the vault locked; the pages must then not be read.
+        if (documentId == null || released || current.busy || lockState.status.value == LockStatus.LOCKED) {
+            sources.forEach { source -> source.dropUnused() }
+            return
+        }
+        if (current.documentPageCount + sources.size > MAX_PAGES_PER_DOCUMENT) {
+            sources.forEach { source -> source.dropUnused() }
             mutableUiState.value = current.copy(notice = AddDocumentFailure.TOO_MANY_PAGES.message)
             return
         }
         mutableUiState.value = current.copy(addingPages = true, notice = null)
-        viewModelScope.launch { addPages(prompt, documentId, uris) }
+        viewModelScope.launch { addPages(prompt, documentId, sources) }
     }
 
     /** Opens "Remove this page?". Only offered when the document has more than one page. */
@@ -560,10 +585,10 @@ class ViewerViewModel(
         }
     }
 
-    private suspend fun addPages(prompt: ReAuthPrompt, documentId: String, uris: List<Uri>) {
+    private suspend fun addPages(prompt: ReAuthPrompt, documentId: String, sources: List<PageSource>) {
         val prepared = mutableListOf<PreparedPage>()
         try {
-            val prepareFailure = prepareEach(documentId, uris, prepared)
+            val prepareFailure = prepareEach(documentId, sources, prepared)
             if (!isStillShowing(documentId)) return
             val addFailure = if (prepared.isEmpty()) prepareFailure else saver.addPages(documentId, prepared, MasterKeyAccess(prompt))
             if (!isStillShowing(documentId)) return
@@ -576,11 +601,15 @@ class ViewerViewModel(
     }
 
     /** Prepares every picked file into [prepared]. Returns the last failure, or null. */
-    private suspend fun prepareEach(documentId: String, uris: List<Uri>, prepared: MutableList<PreparedPage>): AddDocumentFailure? {
+    private suspend fun prepareEach(documentId: String, sources: List<PageSource>, prepared: MutableList<PreparedPage>): AddDocumentFailure? {
         var lastFailure: AddDocumentFailure? = null
-        for (uri in uris) {
-            if (!isStillShowing(documentId)) return null
-            when (val result = preparer.prepare(documentId, uri)) {
+        for ((index, source) in sources.withIndex()) {
+            if (!isStillShowing(documentId)) {
+                // Not prepared any more; a camera photo among them is wiped now.
+                sources.drop(index).forEach { unused -> unused.dropUnused() }
+                return null
+            }
+            when (val result = preparer.prepare(documentId, source)) {
                 is PrepareResult.Prepared -> {
                     prepared.add(result.page)
                     // The viewer shows the real page after adding; this small picture was never drawn.

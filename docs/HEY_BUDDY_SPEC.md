@@ -54,7 +54,7 @@ The user always reviews the values and presses Submit themselves.
 | **1. Secure vault** — **Done, with checks deferred to Phase 7** (owner decision, 2026-10-28; see section 8) | Add, view, delete documents; encryption; biometric lock; no internet | Files are unreadable off the phone; app locks itself |
 | 2. Document reader — detailed spec **APPROVED** in section 7 (2026-10-28) | Camera capture, OCR (English, Hindi and **Tamil**), document type detection, fact extraction, confirm screen | Name, DOB, number read correctly from sample docs, including Tamil ones |
 | 3. Autofill (text) | Autofill service + rules matcher + "Fill all" + review screen | Fills a test form in an app and in Chrome |
-| 4. File uploads | Documents provider (appears in file pickers), photo resize. **Note:** photos can contain hidden details such as GPS location (EXIF). Strip this hidden data before any file is uploaded to a website. **Note (owner decision, Task 1.10p):** multi-page documents store each page as its own encrypted file (not one combined PDF), so a website can get front and back as separate uploads, or Phase 4 builds a combined PDF on the fly only when a website asks for one | Uploads photo + PDF on a real government portal |
+| 4. File uploads | Documents provider (appears in file pickers), photo resize. **Note:** photos can contain hidden details such as GPS location (EXIF). Strip this hidden data before any file is uploaded to a website. **Note (owner decision, Task 2.4):** in-app camera photos are NOT cropped to the guide frame (the full photo is kept, so nothing is cut off). Before any page is uploaded to a website, offer cropping to just the document (manual crop handles), because the full photo may include background objects or other papers. **Note (owner decision, Task 1.10p):** multi-page documents store each page as its own encrypted file (not one combined PDF), so a website can get front and back as separate uploads, or Phase 4 builds a combined PDF on the fly only when a website asks for one | Uploads photo + PDF on a real government portal |
 | 5. On-device AI | AI matcher for unknown fields, confidence, site memory | Unusual labels filled correctly; unsure fields left empty |
 | 6. Voice + screen reading | Assist API reader, push-to-talk, optional wake word | Tells which documents a form needs, offline |
 | 7. Hardening + launch | Security review, phishing and prompt-injection tests, Play forms; **plus "Before first real user" (section 8): every check deferred from Phase 1** | No high-risk issues; Play review passed; section 8 all closed |
@@ -605,6 +605,38 @@ its consonant back after it ("தந்‌ைத" → "தந்தை"), and ap
 **Decision (owner, 2026-10-28): (a) CameraX inside the app, capture to memory only**, because rule 7.3-2 (never on disk or in the gallery unencrypted)
 can only be guaranteed when the photo never leaves our app's memory.
 
+**How it is built (Task 2.4):**
+- **Libraries:** CameraX 1.6.2 (`camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-compose`), approved in 7.11.
+- **Capture:** `ImageCapture` with the **in-memory** callback (capture size asked: 3072 x 2304). The camera's
+  JPEG is decoded, turned upright, shrunk to at most **3072 px** on the long side and re-saved as JPEG
+  **quality 90** (owner decision). Re-saving writes the pixels only, so **all photo metadata (EXIF: time,
+  phone, location) is removed**. The camera's own JPEG is wiped at once; the new one goes into
+  `PagePreparer.prepareCaptured`, which shares the type check, thumbnail, storage check and encryption of a
+  picked file (pending page, Task 1.10p) and wipes the bytes.
+- **No crop:** the guide frame (Card or A4 Page shape) is only a guide; the photo is kept whole (owner
+  decision; cropping comes before uploads, Phase 4 note).
+- **Permission:** `CAMERA`, asked only after "Take photo" and our own short explanation. `uses-feature
+  camera.any required=false`: phones without a camera can install the app and never see "Take photo".
+  Because Android cannot tell "Don't ask again" apart from "turned off in Settings" BEFORE asking, our
+  explanation always comes first when the permission is missing; "Don't ask again" is decided from
+  Android's answer (denied and no rationale), and then the screen offers **Choose a photo instead** and
+  **Open settings** (with the usual one-time auto-lock pass). A plain "No" offers Choose a photo and Ask
+  again. CAMERA is the only permission that needs the user's yes (phone test).
+- **Hints (measured, advice only):** brightness = average light value; sharpness = variance of the
+  Laplacian on a 640 px wide picture. Live: the middle value of the last 8 preview frames gives "More
+  light needed" or "Hold steady"; after the shot: "More light needed" or "Too blurry, try again". The
+  limits (60 and 60) are PROVISIONAL until the real-camera measurement (8.1). Each preview frame is measured
+  and **closed at once**; none is kept or queued (CameraX keeps only the newest; a phone test proves
+  frames keep flowing, and a fake frame proves close-after-measure even on errors).
+- **Safety:** the vault lock closes the camera at once and wipes any photo, also one that finishes after
+  the lock; leaving the screen releases the camera; the preview is drawn inside our window (EMBEDDED
+  mode, not a separate surface), so FLAG_SECURE covers it (phone screenshot test is black).
+- **Measured (Task 2.4):** a camera page in the phone test (camera facing a plain wall) was 349 KB; a
+  printed document has more detail, so expect a few hundred KB to about 1 MB a page.
+- **Testing note:** the owner's Realme phone refuses `pm grant` / `pm revoke` from the PC ("shell has no
+  GRANT_RUNTIME_PERMISSIONS"), so the camera permission is given once through the app itself, and the
+  deny paths are covered by computer tests, screenshots and manual checks.
+
 ### 7.6 Document type detection (rules on the OCR text)
 
 A pure Kotlin function scores the text for each type and suggests the best one; the user can change it.
@@ -727,7 +759,7 @@ permission.
 | **2.1 OCR library and privacy guard** | Add the bundled ML Kit recognizer; remove ACCESS_NETWORK_STATE and the data-transport job/receiver from the manifest; keep only `arm64-v8a` and `armeabi-v7a`; phone test: installed app has no network permission, only the launcher is exported; Licences screen shows ML Kit's third-party licences; report the real size added | Test passes; app size growth reported; airplane-mode check by the owner |
 | **2.2 Text reader** | `TextReader` (an interface, so the Tamil engine of 2.3 plugs in next to ML Kit): reads one page (photo bytes in memory, or a PDF page drawn with PdfRenderer) and returns lines with their positions; memory only; wiped after use; never logged. Phone tests on made-up sample images (rendered English and Hindi text). Compare Devanagari-only vs adding Latin on the same samples | Sample text read correctly; decision on library 2 |
 | **2.3 Tamil reading engine** | Compare (a) Tesseract + `tam` and (b) PaddleOCR Tamil + ONNX Runtime Mobile on three made-up Tamil samples (7.4a): character accuracy, speed on the owner's phone, size, licence, no internet. Table + recommendation; **ask the owner before adding either library**; then build the chosen engine behind `TextReader` and merge its Tamil lines with ML Kit's per page | Owner picks the engine from the measured table; Tamil sample text read with the measured accuracy; still no network permission |
-| **2.4 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera; **real phone-camera reading test** (from Task 2.2): the owner photographs the 3 generated clean fake samples with the phone camera and they are measured like Task 2.2 (character accuracy, fields found, time) as a "real photo" group, and the Tamil scores re-checked on real photos of the Tamil samples (from Task 2.3) |
+| **2.4 In-app camera** | CameraX screen: preview, capture to memory, framing guide, flash; CAMERA permission asked only on "Take a photo", with a plain reason and a working path when refused; the photo becomes a pending page (Task 1.10p pipeline); camera closes on lock and in the background; FLAG_SECURE stays | Photo saved as an encrypted page; nothing in the gallery or on disk (checked); lock closes the camera; **real phone-camera reading test** (from Task 2.2): the owner photographs the 3 generated clean fake samples with the phone camera and they are measured like Task 2.2 (character accuracy, fields found, time) as a "real photo" group, and the Tamil scores re-checked on real photos of the Tamil samples (from Task 2.3) — **moved to 8.1 by the owner (2026-10-30); the measuring screen is built** |
 | **2.5 Document type guess** | Pure rules (7.6) + computer tests | Each sample type guessed; unknown stays Other |
 | **2.6 Facts part 1: numbers and dates (including Tamil month names)** | PAN rule, Aadhaar rule with Verhoeff, VID/enrolment/masked exclusion, date rules with Tamil month names and Tamil digits (7.7) + computer tests (including OCR mix-ups) | All rule tests pass |
 | **2.7 Facts part 2: name, gender, address (English, Hindi and Tamil labels)** | Heuristics (7.7) for Aadhaar front/back and PAN old/new layouts, Tamil labels (7.7), Tamil-script names and addresses + computer tests on made-up samples | All rule tests pass |
@@ -753,7 +785,11 @@ permission.
    official source (no JitPack); PaddleOCR, ONNX Runtime and the best model removed; the 7.4a merge
    rule (keep both when unsure); one shared Tamil cleanup function; Tamil scores re-checked on real
    photos in Task 2.4.
-7. **Tamil is required** (later the same day): a Tamil reading engine chosen by measurement in
+7. **Task 2.4 (2026-10-30):** camera photos re-saved as JPEG quality 90 without metadata; no crop to
+   the guide frame (crop offered before uploads, Phase 4); preview frames closed right after measuring;
+   the tests may grant/revoke CAMERA for Hey Buddy only and must leave it granted (the Realme phone
+   refuses this from the PC, so it is given once in the app).
+8. **Tamil is required** (later the same day): a Tamil reading engine chosen by measurement in
    Task 2.3 (ask before adding it), Tamil labels and month names in the fact rules, typed Tamil
    fields in "My details", and Tamil Nadu certificates as document types (Task 2.11, with a migration).
 
@@ -785,8 +821,16 @@ before the first real user** gets the app. **No emulator anywhere unless the own
 | "Confirm it's you" no longer appears on almost every document: NOT TESTED YET with a 5-minute key | 1.9 | DECIDED: owner counted it during Task 1.9 (appeared nearly every time over ~20 opens with 30 s), so `VAULT_UNLOCK_WINDOW_SECONDS` is now 300. The key on the owner's phone was created with 30 s and keeps it until the vault is set up again | After "Delete everything" (Task 1.10) creates a new key: open ~20 documents in a row within 5 minutes; "Confirm it's you" must not appear |
 | Predictive back preview: NOT TESTED YET | 1.10m | The back-swipe preview only exists on Android 14+; the owner's phone runs Android 13 | On a real Android 14+ phone (no emulator unless the owner asks): swipe back slowly on the viewer, Add and Settings screens; a preview of the previous screen must show, and cancelling the swipe stays on the screen |
 | `SecureWindowTest.ourOwnPickerDoesNotLockTheVault` was flaky once: RECHECK | 1.10 | One full run (100 of 101 passed) failed it with "Activity never becomes requested state RESUMED" while the phone was freezing and unfreezing test processes (battery optimisation). It passed 3 of 3 times on its own | Owner decision: recheck in the full run before the first real user, AFTER battery optimisation is turned back on for Hey Buddy; it must pass |
-| Real phone-camera reading test, including the Tamil scores (Task 2.3): NOT TESTED YET (unless closed in Task 2.4) | 2.2, 2.3 | Task 2.2 had no phone-camera photos of the generated samples; internet pictures are not allowed (CLAUDE.md) | Photograph the 3 generated clean fake samples (`aadhaar_style_clean`, `pan_style_clean`, `licence_style_clean`) with the phone camera, run the `OcrMeasurement` "real photo" group; names, dates and Aadhaar/PAN numbers must be read |
+| **Real phone-camera measurement** (deferred from 2.2, 2.3 and 2.4; owner decision 2026-10-30): NOT DONE YET | 2.2, 2.3, 2.4 | The measuring screen is built (`RealCameraMeasurement`, test code) but the owner will photograph later | Print the 5 fake samples (`aadhaar_style_clean`, `pan_style_clean`, `licence_style_clean` from Task 2.2; `tn_certificate_style_clean`, `tamil_address_block_clean` from Task 2.3). Run `adb shell am instrument -w -e realCamera yes -e class com.heybuddy.ui.camera.RealCameraMeasurement com.heybuddy.test/androidx.test.runner.AndroidJUnitRunner` and take the 12 photos the screen asks for (each sample good + harder, one blurry, one dark). Then: English/Hindi/Tamil accuracy and fields on real photos; re-check the merge cut-offs 0.5 / 0.7 / 0.8 (no real line dropped); set the camera hint limits (brightness 60 and sharpness 60 are provisional) from the measured values; ask the owner before changing any cut-off |
 | Edge-to-edge with 3-button navigation: NOT TESTED YET | 1.8a | Owner's phone uses gesture navigation; owner chose to skip switching for now. Gesture navigation is verified (screenshots, Task 1.8a) | Switch the phone to 3-button navigation, open every screen; nothing may sit behind the navigation buttons; then switch back |
+
+### 8.1a Play Store and privacy policy (from Task 2.4)
+
+| Item | How to close it |
+| --- | --- |
+| Data safety form | Photos are taken, encrypted and read only on the phone and never sent anywhere, so (on-device processing is not "collection") the answers stay **no data collected, no data shared**. Re-check against Google's form at release time |
+| Camera permission | The Play listing will show the CAMERA permission; no extra declaration form is needed for it |
+| Privacy policy | Add: "The camera is used only to photograph documents into your encrypted vault on this phone; photos are never uploaded or saved to your gallery." |
 
 ### 8.2 Phase 1 review checks (moved from Task 1.11)
 

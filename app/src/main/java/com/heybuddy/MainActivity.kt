@@ -1,5 +1,7 @@
 package com.heybuddy
 
+import com.heybuddy.ui.camera.phoneHasCamera
+import com.heybuddy.ui.camera.CameraRoute
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -375,6 +377,25 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
         viewerViewModel.show(activity, documentId, screenWidth, screenLongest)
     }
     val uiState by viewerViewModel.uiState.collectAsStateWithLifecycle()
+    // "Add page → Take photo" shows the in-app camera on top of the viewer (Task 2.4).
+    var cameraOpen by remember { mutableStateOf(false) }
+    if (cameraOpen) {
+        CameraRoute(
+            lockState = container.vaultLockState,
+            onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+            onPhotoKept = { jpeg ->
+                cameraOpen = false
+                viewerViewModel.onPhotoTaken(activity, jpeg)
+            },
+            onChooseInstead = {
+                cameraOpen = false
+                // Back to "Add a page", which offers Photos and files.
+                viewerViewModel.openAddPage()
+            },
+            onClose = { cameraOpen = false },
+        )
+        return
+    }
     // Back: closes a dialog if one is open, otherwise tidies up (PDF deleted, picture freed) and
     // returns to the list. Only the second can be previewed with the back gesture.
     val leavesTheViewer = uiState.rename == null && !uiState.deleteConfirmOpen && !uiState.addPageChoiceOpen &&
@@ -407,6 +428,7 @@ private fun ViewerRoute(container: AppContainer, activity: FragmentActivity, doc
             onRemovePageDismiss = viewerViewModel::closeRemovePage,
             onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
             onSuccessNoticeShown = viewerViewModel::clearSuccessNotice,
+            onTakePhotoClick = if (phoneHasCamera(activity)) ({ cameraOpen = true }) else null,
         ),
     )
 }
@@ -495,6 +517,25 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
         },
     )
     val uiState by addViewModel.uiState.collectAsStateWithLifecycle()
+    // The in-app camera is shown on top of this screen (Task 2.4); memory only, never saved state.
+    var cameraOpen by remember { mutableStateOf(false) }
+    var pickPhotosNow by remember { mutableStateOf(false) }
+    if (cameraOpen) {
+        CameraRoute(
+            lockState = container.vaultLockState,
+            onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+            onPhotoKept = { jpeg ->
+                cameraOpen = false
+                addViewModel.onPhotoTaken(jpeg)
+            },
+            onChooseInstead = {
+                cameraOpen = false
+                pickPhotosNow = true
+            },
+            onClose = { cameraOpen = false },
+        )
+        return
+    }
     // Back, Cancel and Done all delete any pages not saved yet before returning to the list.
     val closeAndForget = {
         addViewModel.reset()
@@ -518,7 +559,10 @@ private fun AddDocumentRoute(container: AppContainer, activity: FragmentActivity
             onSaveClick = { addViewModel.onSaveClicked(activity) },
             onClose = closeAndForget,
             onBeforeExternalScreen = container.autoLock::issueExternalScreenPass,
+            onTakePhoto = if (phoneHasCamera(activity)) ({ cameraOpen = true }) else null,
+            onPickPhotosNowHandled = { pickPhotosNow = false },
         ),
+        pickPhotosNow = pickPhotosNow,
     )
 }
 
